@@ -14,7 +14,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,7 +33,10 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomSheetScaffold
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -46,8 +51,10 @@ import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -67,6 +74,7 @@ import androidx.core.content.ContextCompat
 import com.example.tgphotopicker.ui.theme.TgPhotoPickerTheme
 import com.skydoves.landscapist.ImageOptions
 import com.skydoves.landscapist.coil.CoilImage
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -86,7 +94,7 @@ class MainActivity : ComponentActivity() {
 fun Main() {
     val images = remember { mutableStateListOf<Uri>() }
 
-    val imagesOnClick = remember { mutableStateListOf<Uri>() }
+    val selected = remember { mutableStateListOf<Uri>() }
 
 
     val context = LocalContext.current
@@ -136,7 +144,6 @@ fun Main() {
     )
     val coroutineScope = rememberCoroutineScope()
 
-    var checkBox by remember { mutableStateOf(false) }
 
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
@@ -147,56 +154,87 @@ fun Main() {
 
             }
 
-            Box {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+            ) {
 
-                LazyVerticalGrid(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    columns = GridCells.Fixed(3),
-                    contentPadding = PaddingValues(8.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(images) { uri ->
-                        Box {
-                            CoilImage(
-                                imageModel = { uri }, // loading a network image or local resource using an URL.
-                                imageOptions = ImageOptions(
-                                    contentScale = ContentScale.Crop,
-                                    alignment = Alignment.Center
-                                ),
-                                modifier = Modifier
-                                    .clickable(onClick = {
-                                        imagesOnClick.add(uri)
-                                        coroutineScope.launch {
-                                            bottomSheetState.hide()
+                    LazyVerticalGrid(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        columns = GridCells.Fixed(3),
+                        contentPadding = PaddingValues(8.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(images) { uri ->
+                            val isSelected = uri in selected
+                            Box {
+                                CoilImage(
+                                    imageModel = { uri }, // loading a network image or local resource using an URL.
+                                    imageOptions = ImageOptions(
+                                        contentScale = ContentScale.Crop,
+                                        alignment = Alignment.Center
+                                    ),
+                                    modifier = Modifier
+                                        .clickable(onClick = {
+                                            if (isSelected) selected.remove(uri)
+                                            else selected.add(uri)
 
-                                        }
-                                    })
-                                    .width(150.dp).height(120.dp),
-                            )
-                            Checkbox(
-                                checkBox,
-                                onCheckedChange = {checkBox = it},
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(100.dp))
-                            )
+                                        })
+                                        .width(150.dp).height(120.dp),
+                                )
+                                Checkbox(
+                                    checked = isSelected,
+                                    onCheckedChange = { newValue ->
+                                        if (newValue) selected.add(uri)
+                                        else selected.remove(uri)
+                                    },
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .background(
+                                            Color.White.copy(alpha = 0.6f),
+                                            RoundedCornerShape(50)
+                                        )
+                                )
+                            }
+
                         }
+
+                }
+
+
+                // теперь безопасно
+                var height by remember { mutableStateOf(0.dp) }
+                var heightBottom by remember { mutableStateOf(0.dp) }
+
+                if (bottomSheetState.currentValue == SheetValue.Expanded) {
+                    height = 0.dp
+                    heightBottom = 0.dp
+                } else {
+                    height = 100.dp
+                    heightBottom = 450.dp
+
+                }
+                Column(
+                    verticalArrangement = Arrangement.Bottom,
+                    modifier = Modifier
+                        .animateContentSize()
+                        .padding(bottom = heightBottom)
+                        .fillMaxHeight()
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .animateContentSize()
+                            .height(height)
+                            .fillMaxWidth(1f),
+                        colors = CardDefaults.cardColors(Color(0xFF212D3B))
+                    ) {
 
                     }
                 }
 
-
             }
-            /*Column {
-                Card(
-                    modifier = Modifier
-                        .height(100.dp)
-                        .fillMaxWidth(1f),
-                    colors = CardDefaults.cardColors(Color(0xFF212D3B))
-                ) {
 
-                }
-            }*/
         },
         sheetContainerColor = Color(0xFF212D3B),
         modifier = Modifier,
@@ -224,7 +262,7 @@ fun Main() {
                     .padding(16.dp)
 
             ) {
-                imagesOnClick.forEach { img ->
+                selected.forEach { img ->
                     CoilImage(
                         imageModel = {img}, // loading a network image or local resource using an URL.
                         imageOptions = ImageOptions(
