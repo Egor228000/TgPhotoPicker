@@ -62,6 +62,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -198,7 +199,6 @@ fun ContentMain(
     permissionLauncher: ManagedActivityResultLauncher<String, Boolean>
 ) {
     var textField by remember { mutableStateOf("") }
-
 
     Box {
         Image(
@@ -355,46 +355,7 @@ fun ContentMain(
     }
 }
 
-@Composable
-fun VideoPlayer(
-    uri: Uri,
-    modifier: Modifier = Modifier,
-    playWhenReady: Boolean = false
-) {
-    val context = LocalContext.current
 
-    // 1) Создаём ExoPlayer и настраиваем медиа
-    val exoPlayer = remember {
-        ExoPlayer.Builder(context)
-            .build()
-            .apply {
-                setMediaItem(MediaItem.fromUri(uri))
-                prepare()
-                this.playWhenReady = playWhenReady
-            }
-    }
-
-    // 2) Освобождаем плеер, когда Composable уходит из композиции
-    DisposableEffect(Unit) {
-        onDispose { exoPlayer.release() }
-    }
-
-    // 3) Рендерим стандартный PlayerView
-    AndroidView(
-        factory = { ctx ->
-            PlayerView(ctx).apply {
-                player = exoPlayer
-                useController = true       // показывать контролы паузы/прокрутки
-                layoutParams =
-                    ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-            }
-        },
-        modifier = modifier
-    )
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -405,28 +366,69 @@ fun SheetContent(
     bottomSheetState: SheetState,
 ) {
     var height by remember { mutableStateOf(0.dp) }
-    var heightBottom by remember { mutableStateOf(0.dp) }
-
-
-    if (bottomSheetState.currentValue == SheetValue.Expanded) {
-        height = 0.dp
-        heightBottom = 0.dp
-    } else {
-        height = 100.dp
-        heightBottom = 450.dp
-        if (selected.size == 1) {
-            height = 100.dp
-
-        }
-
+    var offsets by remember { mutableStateOf(0f) }
+    LaunchedEffect(bottomSheetState) {
+        snapshotFlow { bottomSheetState.requireOffset().dp.value }
+            .collect { fraction ->
+                // fraction от 0f до 1f
+                offsets = fraction
+            }
     }
+
+
+
+    val iconList = listOf(
+        R.drawable.outline_image_24,
+        R.drawable.outline_file_copy_24,
+        R.drawable.outline_location_on_24,
+        R.drawable.baseline_person_24
+    )
+    val iconColor = listOf(
+        Color(0xFF4C94F2),
+        Color(0xFF58BAF2),
+        Color(0xFF5EBF51),
+        Color(0xFFD8AB43),
+    )
+    val iconText = listOf(
+        "Галерея",
+        "Файл",
+        "Геопозиция",
+        "Контакты"
+    )
 
     var textMessage by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) {
-        loadMedia(context, images)
+
+    if (offsets < 1282.0f) {
+        height = 0.dp
+    } else {
+        height = 100.dp
 
     }
+    when (selected.size) {
+        0 -> {
+            if (offsets < 1282) {
+                height = 0.dp
+            } else {
+                height = 100.dp
+
+            }
+
+        }
+        1 -> {
+            height = 0.dp
+            textMessage = "Выбрана ${selected.size} фотография"
+        }
+        2 -> {
+            height = 0.dp
+            textMessage = "Выбраны  ${selected.size} фотографии"
+        }
+        else -> {
+            height = 0.dp
+            textMessage = "Выбраны  ${selected.size} медиафайла"
+        }
+    }
     Column {
+        Text(offsets.toString())
         if (selected.size > 0) {
             Text(
                 textMessage,
@@ -439,26 +441,7 @@ fun SheetContent(
 
         }
 
-
-        if (selected.size == 1) {
-            height = 0.dp
-            textMessage = "Выбрана ${selected.size} фотография"
-
-        } else if (selected.size == 2) {
-            height = 0.dp
-            textMessage = "Выбраны  ${selected.size} фотографии"
-
-        } else if (selected.size > 2) {
-            height = 0.dp
-            textMessage = "Выбраны  ${selected.size} медиафайла"
-
-        } else {
-            textMessage = ""
-
-        }
         Box(
-            modifier = Modifier
-                .fillMaxSize()
         ) {
 
             LazyVerticalGrid(
@@ -466,7 +449,6 @@ fun SheetContent(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 columns = GridCells.Fixed(3),
                 contentPadding = PaddingValues(horizontal = 8.dp),
-                modifier = Modifier.fillMaxSize()
             ) {
                 items(images) { uri ->
                     val isSelected = uri in selected
@@ -479,7 +461,7 @@ fun SheetContent(
                     ) {
                         if (isVideo) {
                             Icon(
-                                painter = painterResource(R.drawable.baseline_play_arrow_24), // добавь эту иконку в res/drawable
+                                painter = painterResource(R.drawable.baseline_play_arrow_24),
                                 contentDescription = "Video",
                                 tint = Color.White,
                                 modifier = Modifier
@@ -499,7 +481,6 @@ fun SheetContent(
                             )
                         }
 
-                        // Чекбокс
                         Checkbox(
                             checked = isSelected,
                             onCheckedChange = { newValue ->
@@ -514,32 +495,12 @@ fun SheetContent(
                 }
 
             }
-            val iconList = listOf(
-                R.drawable.outline_image_24,
-                R.drawable.outline_file_copy_24,
-                R.drawable.outline_location_on_24,
-                R.drawable.baseline_person_24
-            )
-            val iconColor = listOf(
-                Color(0xFF4C94F2),
-                Color(0xFF58BAF2),
-                Color(0xFF5EBF51),
-                Color(0xFFD8AB43),
-            )
-            val iconText = listOf(
-                "Галерея",
-                "Файл",
-                "Геопозиция",
-                "Контакты"
-            )
-
-
 
             Column(
                 verticalArrangement = Arrangement.Bottom,
                 modifier = Modifier
                     .animateContentSize()
-                    .padding(bottom = heightBottom)
+                    .padding(bottom = 450.dp)
                     .fillMaxHeight()
             ) {
                 Card(
@@ -587,11 +548,49 @@ fun SheetContent(
 
                 }
             }
-
         }
     }
 }
+@Composable
+fun VideoPlayer(
+    uri: Uri,
+    modifier: Modifier = Modifier,
+    playWhenReady: Boolean = false
+) {
+    val context = LocalContext.current
 
+    // 1) Создаём ExoPlayer и настраиваем медиа
+    val exoPlayer = remember {
+        ExoPlayer.Builder(context)
+            .build()
+            .apply {
+                setMediaItem(MediaItem.fromUri(uri))
+                prepare()
+                this.playWhenReady = playWhenReady
+            }
+    }
+
+    // 2) Освобождаем плеер, когда Composable уходит из композиции
+    DisposableEffect(Unit) {
+        onDispose { exoPlayer.release() }
+    }
+
+    // 3) Рендерим стандартный PlayerView
+    AndroidView(
+        factory = { ctx ->
+            PlayerView(ctx).apply {
+                player = exoPlayer
+                useController = true       // показывать контролы паузы/прокрутки
+                layoutParams =
+                    ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+            }
+        },
+        modifier = modifier
+    )
+}
 fun isVideo(context: Context, uri: Uri): Boolean {
     val type = context.contentResolver.getType(uri)
     return type?.startsWith("video") == true
