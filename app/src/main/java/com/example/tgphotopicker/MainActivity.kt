@@ -377,50 +377,14 @@ fun SheetContent(
     selected: SnapshotStateList<Uri>,
     bottomSheetState: SheetState,
 ) {
-    var height by remember { mutableStateOf(0.dp) }
-    var offsets by remember { mutableStateOf(0f) }
+
     LaunchedEffect(bottomSheetState) {
         loadMedia(context, images)
     }
 
 
-    var textMessage by remember { mutableStateOf("") }
-
-
-    when (selected.size) {
-        0 -> {
-
-
-        }
-
-        1 -> {
-            height = 0.dp
-            textMessage = "Выбрана ${selected.size} фотография"
-        }
-
-        2 -> {
-            height = 0.dp
-            textMessage = "Выбраны  ${selected.size} фотографии"
-        }
-
-        else -> {
-
-            textMessage = "Выбраны  ${selected.size} медиафайла"
-        }
-    }
     Column {
-        Text(offsets.toString())
-        if (selected.size > 0) {
-            Text(
-                textMessage,
-                color = Color.White,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.W900
-            )
 
-        } else {
-
-        }
 
         Box(
         ) {
