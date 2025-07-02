@@ -4,11 +4,11 @@ import android.Manifest
 import android.content.ContentUris
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
-import android.util.Log
 import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.ManagedActivityResultLauncher
@@ -16,7 +16,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -32,6 +36,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -59,6 +64,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -68,14 +74,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDirection.Companion.Content
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -87,8 +92,9 @@ import com.example.tgphotopicker.ui.theme.TgPhotoPickerTheme
 import com.skydoves.landscapist.ImageOptions
 import com.skydoves.landscapist.coil.CoilImage
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -208,33 +214,40 @@ fun ContentMain(
             modifier = Modifier.fillMaxSize()
 
         )
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .padding(16.dp)
 
         ) {
-            selected.forEach { img ->
-                if (isVideo(context, img)) {
-                    VideoPlayer(
-                        uri = img,
-                        modifier = Modifier
-                            .size(300.dp)
-                    )
-                } else {
-                    CoilImage(
-                        imageModel = { img }, // loading a network image or local resource using an URL.
-                        imageOptions = ImageOptions(
-                            contentScale = ContentScale.Crop,
-                            alignment = Alignment.Center
-                        ),
-                        modifier = Modifier
-                            .clickable(onClick = {
+            item {
 
-                            })
-                            .size(200.dp)
-                    )
+                selected.forEach { img ->
+                    if (isVideo(context, img)) {
+                        VideoPlayer(
+                            uri = img,
+                            modifier = Modifier
+                                .height(300.dp)
+                                .fillMaxWidth(1f)
+                        )
+                    } else {
+                        CoilImage(
+                            imageModel = { img }, // loading a network image or local resource using an URL.
+                            imageOptions = ImageOptions(
+                                contentScale = ContentScale.Crop,
+                                alignment = Alignment.Center
+                            ),
+                            modifier = Modifier
+                                .clickable(onClick = {
+
+                                })
+                                .height(300.dp)
+
+                                .fillMaxWidth(1f)
+
+                        )
+                    }
+
                 }
-
             }
 
         }
@@ -356,7 +369,6 @@ fun ContentMain(
 }
 
 
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SheetContent(
@@ -368,62 +380,31 @@ fun SheetContent(
     var height by remember { mutableStateOf(0.dp) }
     var offsets by remember { mutableStateOf(0f) }
     LaunchedEffect(bottomSheetState) {
-        snapshotFlow { bottomSheetState.requireOffset().dp.value }
-            .collect { fraction ->
-                // fraction от 0f до 1f
-                offsets = fraction
-            }
+        loadMedia(context, images)
     }
 
-
-
-    val iconList = listOf(
-        R.drawable.outline_image_24,
-        R.drawable.outline_file_copy_24,
-        R.drawable.outline_location_on_24,
-        R.drawable.baseline_person_24
-    )
-    val iconColor = listOf(
-        Color(0xFF4C94F2),
-        Color(0xFF58BAF2),
-        Color(0xFF5EBF51),
-        Color(0xFFD8AB43),
-    )
-    val iconText = listOf(
-        "Галерея",
-        "Файл",
-        "Геопозиция",
-        "Контакты"
-    )
 
     var textMessage by remember { mutableStateOf("") }
 
-    if (offsets < 1282.0f) {
-        height = 0.dp
-    } else {
-        height = 100.dp
 
-    }
     when (selected.size) {
         0 -> {
-            if (offsets < 1282) {
-                height = 0.dp
-            } else {
-                height = 100.dp
 
-            }
 
         }
+
         1 -> {
             height = 0.dp
             textMessage = "Выбрана ${selected.size} фотография"
         }
+
         2 -> {
             height = 0.dp
             textMessage = "Выбраны  ${selected.size} фотографии"
         }
+
         else -> {
-            height = 0.dp
+
             textMessage = "Выбраны  ${selected.size} медиафайла"
         }
     }
@@ -460,13 +441,8 @@ fun SheetContent(
                             .height(120.dp)
                     ) {
                         if (isVideo) {
-                            Icon(
-                                painter = painterResource(R.drawable.baseline_play_arrow_24),
-                                contentDescription = "Video",
-                                tint = Color.White,
-                                modifier = Modifier
-                                    .align(Alignment.Center)
-                                    .size(40.dp)
+                            VideoPreview(
+                                uri
                             )
                         } else {
 
@@ -496,61 +472,71 @@ fun SheetContent(
 
             }
 
-            Column(
-                verticalArrangement = Arrangement.Bottom,
-                modifier = Modifier
-                    .animateContentSize()
-                    .padding(bottom = 450.dp)
-                    .fillMaxHeight()
-            ) {
-                Card(
-                    modifier = Modifier
-                        .animateContentSize()
-                        .height(height)
-                        .fillMaxWidth(1f),
-                    colors = CardDefaults.cardColors(Color(0xFF212D3B))
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(40.dp),
-                        modifier = Modifier
-                            .padding(16.dp)
-                    ) {
-                        iconList.indices.forEach { i ->
-                            val iconRes = iconList[i]
-                            val tint = iconColor[i]
-                            val label = iconText[i]
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
 
-                                ) {
-
-                                Column(
-                                    verticalArrangement = Arrangement.Center,
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .size(50.dp)
-                                        .clip(RoundedCornerShape(50.dp))
-                                        .background(tint)
-                                ) {
-                                    Icon(
-                                        painter = painterResource(iconRes),
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                                Text(label, color = Color(0xFF75818F))
-                            }
-
-                        }
-
-                    }
-
-                }
-            }
         }
     }
 }
+
+@Composable
+fun VideoPreview(
+    uri: Uri,
+) {
+    val context = LocalContext.current
+
+    // Загружаем кадр из видео в фоне
+    val bitmap by produceState<Bitmap?>(initialValue = null, uri) {
+        value = withContext(Dispatchers.IO) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    // API 29+: есть удобный метод loadThumbnail
+                    context.contentResolver.loadThumbnail(uri, android.util.Size(480, 480), null)
+                } else {
+                    // Для старых устройств — через MediaStore Thumbnails
+                    val id = uri.lastPathSegment?.toLongOrNull()
+                    if (id != null) {
+                        MediaStore.Video.Thumbnails.getThumbnail(
+                            context.contentResolver,
+                            id,
+                            MediaStore.Video.Thumbnails.MINI_KIND,
+                            null
+                        )
+                    } else null
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
+        }
+    }
+
+    // Просто рендерим картинку — без контролов и без плеера
+    bitmap?.let {
+        Box() {
+            Image(
+                bitmap = it.asImageBitmap(),
+                contentDescription = "Video preview",
+                modifier = Modifier
+                    .size(200.dp),
+                contentScale = ContentScale.Crop
+            )
+            Column(
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.baseline_play_arrow_24),
+                    null,
+                    tint = Color.White,
+                    modifier = Modifier.size(48.dp)
+                )
+            }
+
+        }
+
+    }
+}
+
 @Composable
 fun VideoPlayer(
     uri: Uri,
@@ -591,6 +577,7 @@ fun VideoPlayer(
         modifier = modifier
     )
 }
+
 fun isVideo(context: Context, uri: Uri): Boolean {
     val type = context.contentResolver.getType(uri)
     return type?.startsWith("video") == true
