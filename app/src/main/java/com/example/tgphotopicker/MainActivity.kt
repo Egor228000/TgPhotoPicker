@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
+import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -50,6 +51,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -69,7 +71,11 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import com.example.tgphotopicker.ui.theme.TgPhotoPickerTheme
 import com.skydoves.landscapist.ImageOptions
 import com.skydoves.landscapist.coil.CoilImage
@@ -102,8 +108,11 @@ fun Main() {
                 context,
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     Manifest.permission.READ_MEDIA_IMAGES
+                    Manifest.permission.READ_MEDIA_VIDEO
+
                 } else {
                     Manifest.permission.READ_EXTERNAL_STORAGE
+
                 }
             ) == PackageManager.PERMISSION_GRANTED
         )
@@ -122,13 +131,14 @@ fun Main() {
             permissionLauncher.launch(
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     Manifest.permission.READ_MEDIA_IMAGES
+                    Manifest.permission.READ_MEDIA_VIDEO
+
                 } else {
                     Manifest.permission.READ_EXTERNAL_STORAGE
                 }
             )
         }
     }
-
 
 
     var textField by remember { mutableStateOf("") }
@@ -165,12 +175,17 @@ fun Main() {
         sheetContent = {
 
             LaunchedEffect(Unit) {
-                loadImages(context, images)
+                loadMedia(context, images)
 
             }
             Column {
                 if (selected.size > 0) {
-                    Text(textMessageb, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.W900)
+                    Text(
+                        textMessageb,
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.W900
+                    )
 
                 } else {
 
@@ -207,16 +222,36 @@ fun Main() {
                     ) {
                         items(images) { uri ->
                             val isSelected = uri in selected
-                            Box {
-                                CoilImage(
-                                    imageModel = { uri }, // loading a network image or local resource using an URL.
-                                    imageOptions = ImageOptions(
-                                        contentScale = ContentScale.Crop,
-                                        alignment = Alignment.Center
-                                    ),
-                                    modifier = Modifier
-                                        .width(150.dp).height(120.dp),
-                                )
+                            val isVideo = isVideo(context, uri)
+
+                            Box(
+                                modifier = Modifier
+                                    .width(150.dp)
+                                    .height(120.dp)
+                            ) {
+                                if (isVideo) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.baseline_play_arrow_24), // добавь эту иконку в res/drawable
+                                        contentDescription = "Video",
+                                        tint = Color.White,
+                                        modifier = Modifier
+                                            .align(Alignment.Center)
+                                            .size(40.dp)
+                                    )
+                                } else {
+
+
+                                    CoilImage(
+                                        imageModel = { uri },
+                                        imageOptions = ImageOptions(
+                                            contentScale = ContentScale.Crop,
+                                            alignment = Alignment.Center
+                                        ),
+                                        modifier = Modifier.matchParentSize()
+                                    )
+                                }
+
+                                // Чекбокс
                                 Checkbox(
                                     checked = isSelected,
                                     onCheckedChange = { newValue ->
@@ -225,10 +260,9 @@ fun Main() {
                                     },
                                     modifier = Modifier
                                         .align(Alignment.TopEnd)
-
+                                        .padding(4.dp)
                                 )
                             }
-
                         }
 
                     }
@@ -239,7 +273,7 @@ fun Main() {
                         R.drawable.baseline_person_24
                     )
                     val iconColor = listOf(
-                       Color(0xFF4C94F2),
+                        Color(0xFF4C94F2),
                         Color(0xFF58BAF2),
                         Color(0xFF5EBF51),
                         Color(0xFFD8AB43),
@@ -274,12 +308,12 @@ fun Main() {
                             ) {
                                 iconList.indices.forEach { i ->
                                     val iconRes = iconList[i]
-                                    val tint   = iconColor[i]
-                                    val label  = iconText[i]
+                                    val tint = iconColor[i]
+                                    val label = iconText[i]
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
 
-                                    ) {
+                                        ) {
 
                                         Column(
                                             verticalArrangement = Arrangement.Center,
@@ -337,20 +371,27 @@ fun Main() {
 
             ) {
                 selected.forEach { img ->
-                    CoilImage(
-                        imageModel = {img}, // loading a network image or local resource using an URL.
-                        imageOptions = ImageOptions(
-                            contentScale = ContentScale.Crop,
-                            alignment = Alignment.Center
-                        ),
-                        modifier = Modifier
-                            .clickable(onClick = {
+                    if (isVideo(context, img)) {
+                        VideoPlayer(
+                            uri = img,
+                            modifier = Modifier
+                                .size(300.dp)
+                        )
+                    } else {
+                        CoilImage(
+                            imageModel = { img }, // loading a network image or local resource using an URL.
+                            imageOptions = ImageOptions(
+                                contentScale = ContentScale.Crop,
+                                alignment = Alignment.Center
+                            ),
+                            modifier = Modifier
+                                .clickable(onClick = {
 
-                            })
-                            .width(150.dp).height(120.dp)
+                                })
+                                .size(200.dp)
+                        )
+                    }
 
-                        ,
-                    )
                 }
 
             }
@@ -431,8 +472,10 @@ fun Main() {
                                     when {
                                         scaffoldState.bottomSheetState.isVisible ->
                                             scaffoldState.bottomSheetState.hide()
+
                                         scaffoldState.bottomSheetState.isVisible ->
                                             scaffoldState.bottomSheetState.expand()
+
                                         else ->
                                             scaffoldState.bottomSheetState.show()
                                     }
@@ -440,6 +483,8 @@ fun Main() {
                                     permissionLauncher.launch(
                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                             Manifest.permission.READ_MEDIA_IMAGES
+                                            Manifest.permission.READ_MEDIA_VIDEO
+
                                         } else {
                                             Manifest.permission.READ_EXTERNAL_STORAGE
                                         }
@@ -468,27 +513,100 @@ fun Main() {
     }
 }
 
+@Composable
+fun VideoPlayer(
+    uri: Uri,
+    modifier: Modifier = Modifier,
+    playWhenReady: Boolean = false
+) {
+    val context = LocalContext.current
 
+    // 1) Создаём ExoPlayer и настраиваем медиа
+    val exoPlayer = remember {
+        ExoPlayer.Builder(context)
+            .build()
+            .apply {
+                setMediaItem(MediaItem.fromUri(uri))
+                prepare()
+                this.playWhenReady = playWhenReady
+            }
+    }
 
+    // 2) Освобождаем плеер, когда Composable уходит из композиции
+    DisposableEffect(Unit) {
+        onDispose { exoPlayer.release() }
+    }
 
-private fun loadImages(context: Context, images: MutableList<Uri>) {
-    val projection = arrayOf(MediaStore.Images.Media._ID)
-    val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
+    // 3) Рендерим стандартный PlayerView
+    AndroidView(
+        factory = { ctx ->
+            PlayerView(ctx).apply {
+                player = exoPlayer
+                useController = true       // показывать контролы паузы/прокрутки
+                layoutParams =
+                    ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+            }
+        },
+        modifier = modifier
+    )
+}
 
+fun isVideo(context: Context, uri: Uri): Boolean {
+    val type = context.contentResolver.getType(uri)
+    return type?.startsWith("video") == true
+}
+
+private fun loadMedia(context: Context, mediaList: MutableList<Uri>) {
+    val imageProjection = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DATE_ADDED)
+    val videoProjection = arrayOf(MediaStore.Video.Media._ID, MediaStore.Video.Media.DATE_ADDED)
+
+    val imageUriList = mutableListOf<Pair<Uri, Long>>()
+    val videoUriList = mutableListOf<Pair<Uri, Long>>()
+
+    // Загрузка изображений
     context.contentResolver.query(
         MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-        projection, null, null, sortOrder
+        imageProjection,
+        null,
+        null,
+        null
     )?.use { cursor ->
         val idCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
-        images.clear()
-
+        val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED)
         while (cursor.moveToNext()) {
             val id = cursor.getLong(idCol)
-            val contentUri = ContentUris.withAppendedId(
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id
-            )
-            Log.d("Gallery", "Found image URI: $contentUri")
-            images.add(contentUri)
+            val date = cursor.getLong(dateCol)
+            val contentUri =
+                ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
+            imageUriList.add(contentUri to date)
         }
-    } ?: Log.e("Gallery", "Query returned null cursor")
+    }
+
+    // Загрузка видео
+    context.contentResolver.query(
+        MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+        videoProjection,
+        null,
+        null,
+        null
+    )?.use { cursor ->
+        val idCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
+        val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
+        while (cursor.moveToNext()) {
+            val id = cursor.getLong(idCol)
+            val date = cursor.getLong(dateCol)
+            val contentUri =
+                ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
+            videoUriList.add(contentUri to date)
+        }
+    }
+
+    // Объединяем, сортируем по дате и сохраняем в основной список
+    mediaList.clear()
+    (imageUriList + videoUriList)
+        .sortedByDescending { it.second } // сортировка по дате (DESC)
+        .mapTo(mediaList) { it.first }
 }
