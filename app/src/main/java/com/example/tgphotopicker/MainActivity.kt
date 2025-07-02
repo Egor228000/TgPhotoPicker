@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -144,7 +146,24 @@ fun Main() {
     )
     val coroutineScope = rememberCoroutineScope()
 
+// теперь безопасно
+    var height by remember { mutableStateOf(0.dp) }
+    var heightBottom by remember { mutableStateOf(0.dp) }
 
+
+    if (bottomSheetState.currentValue == SheetValue.Expanded) {
+        height = 0.dp
+        heightBottom = 0.dp
+    } else {
+        height = 100.dp
+        heightBottom = 300.dp
+        if (selected.size == 1) {
+            height = 100.dp
+
+        }
+
+    }
+    var textMessageb by remember { mutableStateOf("") }
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
         sheetContent = {
@@ -153,17 +172,41 @@ fun Main() {
                 loadImages(context, images)
 
             }
+            Column {
+                if (selected.size > 0) {
+                    Text(textMessageb)
 
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-            ) {
+                } else {
+
+                }
+
+
+                if (selected.size == 1) {
+                    height = 0.dp
+                    textMessageb = "Выбраны ${selected.size} фотография"
+
+                } else if (selected.size == 2) {
+                    height = 0.dp
+                    textMessageb = "Выбраны  ${selected.size} фотографии"
+
+                } else if (selected.size > 2) {
+                    height = 0.dp
+                    textMessageb = "Выбраны  ${selected.size} медиафайла"
+
+                } else {
+                    textMessageb = ""
+
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                ) {
 
                     LazyVerticalGrid(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         columns = GridCells.Fixed(3),
-                        contentPadding = PaddingValues(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
                         items(images) { uri ->
@@ -200,45 +243,88 @@ fun Main() {
 
                         }
 
-                }
+                    }
+                    val iconList = listOf(
+                        R.drawable.outline_image_24,
+                        R.drawable.outline_file_copy_24,
+                        R.drawable.outline_location_on_24,
+                        R.drawable.baseline_person_24
+                    )
+                    val iconColor = listOf(
+                       Color(0xFF4C94F2),
+                        Color(0xFF58BAF2),
+                        Color(0xFF5EBF51),
+                        Color(0xFFD8AB43),
+                    )
+                    val iconText = listOf(
+                        "Галерея",
+                        "Файл",
+                        "Геопозиция",
+                        "Контакты"
+                    )
 
 
-                // теперь безопасно
-                var height by remember { mutableStateOf(0.dp) }
-                var heightBottom by remember { mutableStateOf(0.dp) }
 
-                if (bottomSheetState.currentValue == SheetValue.Expanded) {
-                    height = 0.dp
-                    heightBottom = 0.dp
-                } else {
-                    height = 100.dp
-                    heightBottom = 450.dp
-
-                }
-                Column(
-                    verticalArrangement = Arrangement.Bottom,
-                    modifier = Modifier
-                        .animateContentSize()
-                        .padding(bottom = heightBottom)
-                        .fillMaxHeight()
-                ) {
-                    Card(
+                    Column(
+                        verticalArrangement = Arrangement.Bottom,
                         modifier = Modifier
                             .animateContentSize()
-                            .height(height)
-                            .fillMaxWidth(1f),
-                        colors = CardDefaults.cardColors(Color(0xFF212D3B))
+                            .padding(bottom = heightBottom)
+                            .fillMaxHeight()
                     ) {
+                        Card(
+                            modifier = Modifier
+                                .animateContentSize()
+                                .height(height)
+                                .fillMaxWidth(1f),
+                            colors = CardDefaults.cardColors(Color(0xFF212D3B))
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(40.dp),
+                                modifier = Modifier
+                                    .padding(16.dp)
+                            ) {
+                                iconList.indices.forEach { i ->
+                                    val iconRes = iconList[i]
+                                    val tint   = iconColor[i]
+                                    val label  = iconText[i]
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
 
+                                    ) {
+
+                                        Column(
+                                            verticalArrangement = Arrangement.Center,
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier
+                                                .size(50.dp)
+                                                .clip(RoundedCornerShape(50.dp))
+                                                .background(tint)
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(iconRes),
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+                                        Text(label, color = Color(0xFF75818F))
+                                    }
+
+                                }
+
+                            }
+
+                        }
                     }
-                }
 
+                }
             }
 
         },
         sheetContainerColor = Color(0xFF212D3B),
         modifier = Modifier,
-        sheetPeekHeight = 400.dp,
+        sheetPeekHeight = 570.dp,
         sheetShape = RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp),
         sheetSwipeEnabled = true,
         topBar = {
