@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,7 +34,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -53,10 +51,8 @@ import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -70,13 +66,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.tgphotopicker.ui.theme.TgPhotoPickerTheme
 import com.skydoves.landscapist.ImageOptions
 import com.skydoves.landscapist.coil.CoilImage
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -174,7 +170,7 @@ fun Main() {
             }
             Column {
                 if (selected.size > 0) {
-                    Text(textMessageb)
+                    Text(textMessageb, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.W900)
 
                 } else {
 
@@ -183,7 +179,7 @@ fun Main() {
 
                 if (selected.size == 1) {
                     height = 0.dp
-                    textMessageb = "Выбраны ${selected.size} фотография"
+                    textMessageb = "Выбрана ${selected.size} фотография"
 
                 } else if (selected.size == 2) {
                     height = 0.dp
@@ -219,11 +215,6 @@ fun Main() {
                                         alignment = Alignment.Center
                                     ),
                                     modifier = Modifier
-                                        .clickable(onClick = {
-                                            if (isSelected) selected.remove(uri)
-                                            else selected.add(uri)
-
-                                        })
                                         .width(150.dp).height(120.dp),
                                 )
                                 Checkbox(
@@ -234,10 +225,7 @@ fun Main() {
                                     },
                                     modifier = Modifier
                                         .align(Alignment.TopEnd)
-                                        .background(
-                                            Color.White.copy(alpha = 0.6f),
-                                            RoundedCornerShape(50)
-                                        )
+
                                 )
                             }
 
@@ -359,7 +347,9 @@ fun Main() {
                             .clickable(onClick = {
 
                             })
-                            .width(150.dp).height(120.dp),
+                            .width(150.dp).height(120.dp)
+
+                        ,
                     )
                 }
 
@@ -473,10 +463,7 @@ fun Main() {
                         )
                     }
                 }
-
             )
-
-
         }
     }
 }
