@@ -41,6 +41,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.BottomSheetScaffoldState
 import androidx.compose.material3.Card
@@ -377,7 +379,8 @@ fun SheetContent(
     selected: SnapshotStateList<Uri>,
     bottomSheetState: SheetState,
 ) {
-
+    var openUri = remember { mutableStateListOf<Uri>() }
+    var isVideo by remember { mutableStateOf<Boolean>(false) }
     LaunchedEffect(bottomSheetState) {
         loadMedia(context, images)
     }
@@ -397,7 +400,7 @@ fun SheetContent(
             ) {
                 items(images) { uri ->
                     val isSelected = uri in selected
-                    val isVideo = isVideo(context, uri)
+                    isVideo = isVideo(context, uri)
 
                     Box(
                         modifier = Modifier
@@ -406,7 +409,11 @@ fun SheetContent(
                     ) {
                         if (isVideo) {
                             VideoPreview(
-                                uri
+                                uri,
+                                modifier = Modifier
+                                    .clickable(onClick = {
+                                        openUri.add(uri)
+                                    })
                             )
                         } else {
 
@@ -417,7 +424,12 @@ fun SheetContent(
                                     contentScale = ContentScale.Crop,
                                     alignment = Alignment.Center
                                 ),
-                                modifier = Modifier.matchParentSize()
+                                modifier = Modifier
+                                    .clickable(onClick = {
+                                        openUri.add(uri)
+
+                                    })
+                                    .matchParentSize()
                             )
                         }
 
@@ -439,11 +451,51 @@ fun SheetContent(
 
         }
     }
+
+    // Полноэкранный режим просмотра
+    if (openUri.isNotEmpty()) {
+        BasicAlertDialog(
+            onDismissRequest = { false },
+            modifier = Modifier
+                .fillMaxSize()
+
+        ) {
+            Box {
+                openUri.forEach { uri ->
+                    Box {
+                        if (isVideo) {
+                            VideoPlayer(
+                                uri,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                            )
+                        } else {
+
+
+                            CoilImage(
+                                imageModel = { uri },
+                                imageOptions = ImageOptions(
+                                    contentScale = ContentScale.Crop,
+                                    alignment = Alignment.Center
+                                ),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clickable(onClick = {
+
+                                    })
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
 fun VideoPreview(
     uri: Uri,
+    modifier: Modifier
 ) {
     val context = LocalContext.current
 
@@ -475,7 +527,9 @@ fun VideoPreview(
 
     // Просто рендерим картинку — без контролов и без плеера
     bitmap?.let {
-        Box() {
+        Box(
+            modifier = modifier
+        ) {
             Image(
                 bitmap = it.asImageBitmap(),
                 contentDescription = "Video preview",
