@@ -53,6 +53,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.SheetValue
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -86,6 +87,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
@@ -380,7 +383,6 @@ fun SheetContent(
     bottomSheetState: SheetState,
 ) {
     var openUri = remember { mutableStateListOf<Uri>() }
-    var isVideo by remember { mutableStateOf<Boolean>(false) }
     LaunchedEffect(bottomSheetState) {
         loadMedia(context, images)
     }
@@ -400,7 +402,7 @@ fun SheetContent(
             ) {
                 items(images) { uri ->
                     val isSelected = uri in selected
-                    isVideo = isVideo(context, uri)
+                    val isVideo = isVideo(context, uri)
 
                     Box(
                         modifier = Modifier
@@ -454,40 +456,55 @@ fun SheetContent(
 
     // Полноэкранный режим просмотра
     if (openUri.isNotEmpty()) {
-        BasicAlertDialog(
+        Dialog(
             onDismissRequest = { false },
-            modifier = Modifier
-                .fillMaxSize()
-
+            properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            Box {
-                openUri.forEach { uri ->
-                    Box {
-                        if (isVideo) {
-                            VideoPlayer(
-                                uri,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                            )
-                        } else {
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+
+                ) {
+                    openUri.forEach { uri ->
+                        val isVideo = isVideo(context, uri)
+                        Box {
+                            if (isVideo) {
+                                VideoPlayer(
+                                    uri,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                )
+                            } else {
 
 
-                            CoilImage(
-                                imageModel = { uri },
-                                imageOptions = ImageOptions(
-                                    contentScale = ContentScale.Crop,
-                                    alignment = Alignment.Center
-                                ),
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clickable(onClick = {
+                                CoilImage(
+                                    imageModel = { uri },
+                                    imageOptions = ImageOptions(
+                                        contentScale = ContentScale.Crop,
+                                        alignment = Alignment.Center
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clickable(onClick = {
 
-                                    })
-                            )
+                                        })
+                                )
+                            }
                         }
                     }
+                    IconButton(
+                        onClick = {
+                            openUri.clear()
+                        }
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.baseline_close_24),
+                            null
+                        )
+                    }
                 }
-            }
+
         }
     }
 }
@@ -505,7 +522,11 @@ fun VideoPreview(
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     // API 29+: есть удобный метод loadThumbnail
-                    context.contentResolver.loadThumbnail(uri, android.util.Size(480, 480), null)
+                    context.contentResolver.loadThumbnail(
+                        uri,
+                        android.util.Size(480, 480),
+                        null
+                    )
                 } else {
                     val id = uri.lastPathSegment?.toLongOrNull()
                     if (id != null) {
@@ -601,7 +622,8 @@ fun isVideo(context: Context, uri: Uri): Boolean {
 }
 
 private fun loadMedia(context: Context, mediaList: MutableList<Uri>) {
-    val imageProjection = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DATE_ADDED)
+    val imageProjection =
+        arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DATE_ADDED)
     val videoProjection = arrayOf(MediaStore.Video.Media._ID, MediaStore.Video.Media.DATE_ADDED)
 
     val imageUriList = mutableListOf<Pair<Uri, Long>>()
