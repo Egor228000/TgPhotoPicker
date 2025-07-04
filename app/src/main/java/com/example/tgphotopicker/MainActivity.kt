@@ -507,7 +507,6 @@ fun VideoPreview(
                     // API 29+: есть удобный метод loadThumbnail
                     context.contentResolver.loadThumbnail(uri, android.util.Size(480, 480), null)
                 } else {
-                    // Для старых устройств — через MediaStore Thumbnails
                     val id = uri.lastPathSegment?.toLongOrNull()
                     if (id != null) {
                         MediaStore.Video.Thumbnails.getThumbnail(
