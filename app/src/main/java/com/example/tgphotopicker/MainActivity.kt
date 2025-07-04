@@ -428,36 +428,30 @@ fun SheetContent(
         items(images) { uri ->
             val isSelected = uri in selected
             val selectionIndex = if (isSelected) selected.indexOf(uri) + 1 else 0
-
             val isVideo = isVideo(context, uri)
-            // Анимируем изменение размера
-            val animatedWidth by animateDpAsState(
-                targetValue = if (isSelected) 70.dp else 150.dp,
-                animationSpec = spring(dampingRatio = 0.4f)
-            )
-            val animatedHeight by animateDpAsState(
-                targetValue = if (isSelected) 70.dp else 150.dp,
+
+            val scale by animateFloatAsState(
+                targetValue = if (isSelected) 0.7f else 1f,
                 animationSpec = spring(dampingRatio = 0.4f)
             )
 
             Box(
                 modifier = Modifier
-                    .width(animatedWidth)
-                    .height(animatedHeight)
-
-
+                    .width(150.dp)
+                    .height(120.dp)
             ) {
                 if (isVideo) {
                     VideoPreview(
                         uri,
                         modifier = Modifier
-                            .clickable(onClick = {
-                                openUri.add(uri)
-                            })
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                            }
+                            .clickable { openUri.add(uri) }
                     )
                 } else {
-
-
                     CoilImage(
                         imageModel = { uri },
                         imageOptions = ImageOptions(
@@ -465,16 +459,15 @@ fun SheetContent(
                             alignment = Alignment.Center
                         ),
                         modifier = Modifier
-
-
-                            .clickable(onClick = {
-                                openUri.add(uri)
-
-                            })
-                            .matchParentSize()
-
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                            }
+                            .clickable { openUri.add(uri) }
                     )
                 }
+
                 CircleCheckBox(
                     checked = isSelected,
                     onCheckedChange = { newValue ->
@@ -484,13 +477,10 @@ fun SheetContent(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(4.dp),
-                    countFiles = selectionIndex,
-
-                    )
-
+                    countFiles = selectionIndex
+                )
             }
         }
-
     }
 
 
