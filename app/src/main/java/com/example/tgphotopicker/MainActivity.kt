@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.util.Size
 import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -25,6 +26,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
@@ -46,6 +48,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BasicAlertDialog
@@ -57,6 +60,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheetDefaults.properties
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.SheetValue
@@ -73,6 +77,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -96,7 +101,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -399,7 +406,8 @@ fun SheetContent(
     bottomSheetState: SheetState,
 ) {
     var openUri = remember { mutableStateListOf<Uri>() }
-    val scope = rememberCoroutineScope()
+
+
 
 
     LaunchedEffect(bottomSheetState) {
@@ -421,6 +429,8 @@ fun SheetContent(
             ) {
                 items(images) { uri ->
                     val isSelected = uri in selected
+                    val selectionIndex = if (isSelected) selected.indexOf(uri) + 1 else 0
+
                     val isVideo = isVideo(context, uri)
 
                     Box(
@@ -453,8 +463,7 @@ fun SheetContent(
                                     .matchParentSize()
                             )
                         }
-
-                        Checkbox(
+                        CircleCheckBox(
                             checked = isSelected,
                             onCheckedChange = { newValue ->
                                 if (newValue) selected.add(uri)
@@ -462,8 +471,11 @@ fun SheetContent(
                             },
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .padding(4.dp)
+                                .padding(4.dp),
+                            countFiles =  selectionIndex,
+
                         )
+
                     }
                 }
 
@@ -580,6 +592,43 @@ fun SheetContent(
         }
     }
 }
+@Composable
+fun CircleCheckBox(
+    checked: Boolean,
+    onCheckedChange: ((Boolean) -> Unit)?,
+    modifier: Modifier = Modifier,
+    checkedColor: Color = Color(0xFF0A9FFA),
+    uncheckedColor: Color = Color.White,
+    borderWidth: Dp = 1.5.dp,
+    countFiles: Int
+) {
+
+
+    Box(
+        modifier = modifier
+            .size(24.dp)
+            .clip(CircleShape)
+            .border(
+                width = borderWidth,
+                color = if (checked) checkedColor else uncheckedColor,
+                shape = CircleShape
+            )
+            .clickable { onCheckedChange?.invoke(!checked) }
+            .background(
+                if (checked) checkedColor
+                else Color.Transparent
+            )
+    ) {
+        if (checked) {
+            Text(
+                countFiles.toString(), color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.Center)
+            )
+        }
+
+    }
+}
 
 @Composable
 fun VideoPreview(
@@ -596,7 +645,7 @@ fun VideoPreview(
                     // API 29+: есть удобный метод loadThumbnail
                     context.contentResolver.loadThumbnail(
                         uri,
-                        android.util.Size(480, 480),
+                        Size(480, 480),
                         null
                     )
                 } else {
