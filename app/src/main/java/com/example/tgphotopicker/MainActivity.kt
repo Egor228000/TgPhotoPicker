@@ -18,14 +18,19 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -65,6 +70,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -76,14 +82,19 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -94,12 +105,14 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.example.tgphotopicker.ui.theme.TgPhotoPickerTheme
+import com.google.common.math.Quantiles.scale
 import com.skydoves.landscapist.ImageOptions
 import com.skydoves.landscapist.coil.CoilImage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.InstantSource.offset
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -383,6 +396,7 @@ fun SheetContent(
     bottomSheetState: SheetState,
 ) {
     var openUri = remember { mutableStateListOf<Uri>() }
+
     LaunchedEffect(bottomSheetState) {
         loadMedia(context, images)
     }
@@ -453,6 +467,34 @@ fun SheetContent(
 
         }
     }
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    val context = LocalContext.current
+    val density = LocalDensity.current.density
+    var constraints by remember { mutableStateOf(Constraints()) }
+
+    // Рассчитываем границы смещения
+    val maxOffsetX = remember(scale, constraints.maxWidth) {
+        if (scale <= 1f) 0f else (constraints.maxWidth * (scale - 1) / 2f)
+    }
+    val maxOffsetY = remember(scale, constraints.maxHeight) {
+        if (scale <= 1f) 0f else (constraints.maxHeight * (scale - 1) / 2f)
+    }
+
+    val state = rememberTransformableState { zoomChange, panChange, _ ->
+        scale = (scale * zoomChange).coerceIn(1f, 6f)
+        offset = Offset(
+            x = (offset.x + panChange.x * scale).coerceIn(-maxOffsetX, maxOffsetX),
+            y = (offset.y + panChange.y * scale).coerceIn(-maxOffsetY, maxOffsetY)
+        )
+    }
+
+
+    // Анимированные значения (вынесены в композицию)
+    val animatedScale by animateFloatAsState(scale, label = "scale")
+    val animatedOffsetX by animateFloatAsState(offset.x, label = "offsetX")
+    val animatedOffsetY by animateFloatAsState(offset.y, label = "offsetY")
+
 
     // Полноэкранный режим просмотраа
     if (openUri.isNotEmpty()) {
@@ -461,49 +503,73 @@ fun SheetContent(
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-
-                ) {
-                    openUri.forEach { uri ->
-                        val isVideo = isVideo(context, uri)
-                        Box {
-                            if (isVideo) {
-                                VideoPlayer(
-                                    uri,
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                )
-                            } else {
-
-
-                                CoilImage(
-                                    imageModel = { uri },
-                                    imageOptions = ImageOptions(
-                                        contentScale = ContentScale.Crop,
-                                        alignment = Alignment.Center
-                                    ),
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .clickable(onClick = {
-
-                                        })
-                                )
-                            }
-                        }
-                    }
-                    IconButton(
-                        onClick = {
-                            openUri.clear()
-                        }
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.baseline_close_24),
-                            null
+            Box(
+                modifier = Modifier
+                    .onSizeChanged {
+                        constraints = Constraints(
+                            maxWidth = (it.width / density).toInt(),
+                            maxHeight = (it.height / density).toInt()
                         )
                     }
+                    .fillMaxSize()
+
+            ) {
+                openUri.forEach { uri ->
+                    val isVideo = isVideo(context, uri)
+                    Box {
+                        if (isVideo) {
+                            VideoPlayer(
+                                uri,
+                                modifier = Modifier.fillMaxSize()
+
+                                )
+                        } else {
+                            CoilImage(
+                                imageModel = { uri },
+                                imageOptions = ImageOptions(
+                                    contentScale = ContentScale.Crop,
+                                    alignment = Alignment.Center
+                                ),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onDoubleTap = {
+                                                // Сброс при двойном тапе
+                                                if (scale > 1f) {
+                                                    scale = 1f
+                                                    offset = Offset.Zero
+                                                } else {
+                                                    scale = 2f
+                                                }
+                                            }
+                                        )
+                                    }
+                                    .graphicsLayer {
+                                        scaleX = animatedScale  // Используем анимированное значение
+                                        scaleY = animatedScale
+                                        translationX = animatedOffsetX
+                                        translationY = animatedOffsetY
+                                    }
+                                    .transformable(state)
+                            )
+                        }
+                    }
                 }
+                IconButton(
+                    onClick = {
+                        openUri.clear()
+                    }
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.baseline_close_24),
+                        null,
+                        tint = Color.White,
+                        modifier = Modifier
+                            .size(30.dp)
+                    )
+                }
+            }
 
         }
     }
