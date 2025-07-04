@@ -20,7 +20,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -415,75 +417,83 @@ fun SheetContent(
     }
 
 
-    Column {
 
 
-        Box(
-        ) {
+    LazyVerticalGrid(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        columns = GridCells.Fixed(3),
+        contentPadding = PaddingValues(horizontal = 8.dp),
+    ) {
+        items(images) { uri ->
+            val isSelected = uri in selected
+            val selectionIndex = if (isSelected) selected.indexOf(uri) + 1 else 0
 
-            LazyVerticalGrid(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                columns = GridCells.Fixed(3),
-                contentPadding = PaddingValues(horizontal = 8.dp),
+            val isVideo = isVideo(context, uri)
+            // Анимируем изменение размера
+            val animatedWidth by animateDpAsState(
+                targetValue = if (isSelected) 70.dp else 150.dp,
+                animationSpec = spring(dampingRatio = 0.4f)
+            )
+            val animatedHeight by animateDpAsState(
+                targetValue = if (isSelected) 70.dp else 150.dp,
+                animationSpec = spring(dampingRatio = 0.4f)
+            )
+
+            Box(
+                modifier = Modifier
+                    .width(animatedWidth)
+                    .height(animatedHeight)
+
+
             ) {
-                items(images) { uri ->
-                    val isSelected = uri in selected
-                    val selectionIndex = if (isSelected) selected.indexOf(uri) + 1 else 0
-
-                    val isVideo = isVideo(context, uri)
-
-                    Box(
+                if (isVideo) {
+                    VideoPreview(
+                        uri,
                         modifier = Modifier
-                            .width(150.dp)
-                            .height(120.dp)
-                    ) {
-                        if (isVideo) {
-                            VideoPreview(
-                                uri,
-                                modifier = Modifier
-                                    .clickable(onClick = {
-                                        openUri.add(uri)
-                                    })
-                            )
-                        } else {
+                            .clickable(onClick = {
+                                openUri.add(uri)
+                            })
+                    )
+                } else {
 
 
-                            CoilImage(
-                                imageModel = { uri },
-                                imageOptions = ImageOptions(
-                                    contentScale = ContentScale.Crop,
-                                    alignment = Alignment.Center
-                                ),
-                                modifier = Modifier
-                                    .clickable(onClick = {
-                                        openUri.add(uri)
+                    CoilImage(
+                        imageModel = { uri },
+                        imageOptions = ImageOptions(
+                            contentScale = ContentScale.Crop,
+                            alignment = Alignment.Center
+                        ),
+                        modifier = Modifier
 
-                                    })
-                                    .matchParentSize()
-                            )
-                        }
-                        CircleCheckBox(
-                            checked = isSelected,
-                            onCheckedChange = { newValue ->
-                                if (newValue) selected.add(uri)
-                                else selected.remove(uri)
-                            },
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(4.dp),
-                            countFiles =  selectionIndex,
 
-                        )
+                            .clickable(onClick = {
+                                openUri.add(uri)
 
-                    }
+                            })
+                            .matchParentSize()
+
+                    )
                 }
+                CircleCheckBox(
+                    checked = isSelected,
+                    onCheckedChange = { newValue ->
+                        if (newValue) selected.add(uri)
+                        else selected.remove(uri)
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp),
+                    countFiles = selectionIndex,
+
+                    )
 
             }
-
-
         }
+
     }
+
+
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     val context = LocalContext.current
@@ -507,15 +517,12 @@ fun SheetContent(
     }
 
 
-
-
-
     // Полноэкранный режим просмотраа
     if (openUri.isNotEmpty()) {
 
 
         Dialog(
-            onDismissRequest = {     openUri.clear()  },
+            onDismissRequest = { openUri.clear() },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             BackHandler {
@@ -541,7 +548,7 @@ fun SheetContent(
                                 uri,
                                 modifier = Modifier.fillMaxSize()
 
-                                )
+                            )
                         } else {
                             CoilImage(
                                 imageModel = { uri },
@@ -592,6 +599,7 @@ fun SheetContent(
         }
     }
 }
+
 @Composable
 fun CircleCheckBox(
     checked: Boolean,
