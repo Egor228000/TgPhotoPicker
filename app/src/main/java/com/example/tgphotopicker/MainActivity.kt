@@ -432,7 +432,7 @@ fun SheetContent(
 
             val scale by animateFloatAsState(
                 targetValue = if (isSelected) 0.7f else 1f,
-                animationSpec = spring(dampingRatio = 0.4f)
+                animationSpec = spring(dampingRatio = 0.6f)
             )
 
             Box(
