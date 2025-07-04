@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.provider.MediaStore
 import android.view.ViewGroup
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -56,6 +57,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheetDefaults.properties
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
@@ -110,6 +112,7 @@ import com.skydoves.landscapist.ImageOptions
 import com.skydoves.landscapist.coil.CoilImage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.InstantSource.offset
@@ -396,6 +399,8 @@ fun SheetContent(
     bottomSheetState: SheetState,
 ) {
     var openUri = remember { mutableStateListOf<Uri>() }
+    val scope = rememberCoroutineScope()
+
 
     LaunchedEffect(bottomSheetState) {
         loadMedia(context, images)
@@ -490,18 +495,20 @@ fun SheetContent(
     }
 
 
-    // Анимированные значения (вынесены в композицию)
-    val animatedScale by animateFloatAsState(scale, label = "scale")
-    val animatedOffsetX by animateFloatAsState(offset.x, label = "offsetX")
-    val animatedOffsetY by animateFloatAsState(offset.y, label = "offsetY")
+
 
 
     // Полноэкранный режим просмотраа
     if (openUri.isNotEmpty()) {
+
+
         Dialog(
-            onDismissRequest = { false },
+            onDismissRequest = {     openUri.clear()  },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
+            BackHandler {
+                openUri.clear()
+            }
 
             Box(
                 modifier = Modifier
@@ -535,7 +542,6 @@ fun SheetContent(
                                     .pointerInput(Unit) {
                                         detectTapGestures(
                                             onDoubleTap = {
-                                                // Сброс при двойном тапе
                                                 if (scale > 1f) {
                                                     scale = 1f
                                                     offset = Offset.Zero
@@ -546,10 +552,10 @@ fun SheetContent(
                                         )
                                     }
                                     .graphicsLayer {
-                                        scaleX = animatedScale  // Используем анимированное значение
-                                        scaleY = animatedScale
-                                        translationX = animatedOffsetX
-                                        translationY = animatedOffsetY
+                                        scaleX = scale
+                                        scaleY = scale
+                                        translationX = offset.x
+                                        translationY = offset.y
                                     }
                                     .transformable(state)
                             )
