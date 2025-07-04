@@ -454,7 +454,7 @@ fun SheetContent(
         }
     }
 
-    // Полноэкранный режим просмотра
+    // Полноэкранный режим просмотраа
     if (openUri.isNotEmpty()) {
         Dialog(
             onDismissRequest = { false },
