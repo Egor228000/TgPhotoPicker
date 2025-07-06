@@ -452,6 +452,7 @@ fun SheetContent(
                             .clickable { openUri.add(uri) }
                     )
                 } else {
+
                     CoilImage(
                         imageModel = { uri },
                         imageOptions = ImageOptions(
@@ -547,7 +548,7 @@ fun SheetContent(
                                     alignment = Alignment.Center
                                 ),
                                 modifier = Modifier
-                                    .fillMaxSize()
+                                    .fillMaxWidth()
                                     .pointerInput(Unit) {
                                         detectTapGestures(
                                             onDoubleTap = {
