@@ -1,7 +1,6 @@
 package com.example.tgphotopicker
 
 import android.Manifest
-import android.R.attr.x
 import android.R.attr.y
 import android.content.ContentUris
 import android.content.Context
@@ -55,10 +54,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -99,8 +98,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.LinearGradientShader
-import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
@@ -116,7 +113,6 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -128,7 +124,6 @@ import com.skydoves.landscapist.ImageOptions
 import com.skydoves.landscapist.coil.CoilImage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.FileNotFoundException
@@ -207,7 +202,6 @@ fun Main() {
 
     Scaffold(
         bottomBar = {
-            // 1) Панель отправки — только когда лист развернут И есть selection
             AnimatedVisibility(
                 visible = expanded && selected.isNotEmpty(),
                 enter = slideInVertically(
@@ -221,7 +215,6 @@ fun Main() {
             ) {
                 PanelSend(selected, selectedVisible, bottomSheetState)
             }
-
 
             AnimatedVisibility(
                 visible = expanded && selected.isEmpty(),
@@ -243,9 +236,7 @@ fun Main() {
         BottomSheetScaffold(
             scaffoldState = scaffoldState,
             sheetContent = {
-                Box(
-
-                ) {
+                Box {
                     SheetContent(
                         context,
                         images,
@@ -254,21 +245,16 @@ fun Main() {
                         stateLazyVerticalGrid,
                         innerPadding
                     )
-
                 }
-
-
             },
             sheetContainerColor = Color(0xFF212D3B),
             sheetPeekHeight = 500.dp,
             sheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
             sheetSwipeEnabled = true,
-
             topBar = {
                 TopAppBar(
                     title = { Text("Photo Picker", color = Color.White) },
                     colors = TopAppBarDefaults.topAppBarColors(Color(0xFF202F41))
-
                 )
             }
         ) {
@@ -278,7 +264,8 @@ fun Main() {
                 hasPermission,
                 scaffoldState,
                 permissionLauncher,
-                selectedVisible
+                selectedVisible,
+                selected
             )
         }
     }
@@ -298,7 +285,6 @@ fun PanelSend(
         modifier = Modifier
             .fillMaxWidth()
     ) {
-
         TextField(
             value = textField,
             onValueChange = { textField = it },
@@ -332,7 +318,6 @@ fun PanelSend(
                         .graphicsLayer(
                             translationY = -35f
                         )
-
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.outline_emoji_language_24),
@@ -461,8 +446,6 @@ fun PanelRow() {
         }
 
     }
-
-
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -473,8 +456,10 @@ fun ContentMain(
     hasPermission: Boolean,
     scaffoldState: BottomSheetScaffoldState,
     permissionLauncher: ManagedActivityResultLauncher<String, Boolean>,
-    selectedVisible: SnapshotStateList<Uri>
-) {
+    selectedVisible: SnapshotStateList<Uri>,
+    selected: SnapshotStateList<Uri>,
+
+    ) {
     var textField by remember { mutableStateOf("") }
 
     Box(
@@ -493,7 +478,7 @@ fun ContentMain(
                 Color(0xFFC953BD)
             ),
             start = Offset(2f, 2f),
-            end = Offset(2f, y + 200f)  // например, градиент по вертикали на 200px
+            end = Offset(2f, y + 200f)
         )
 
         LazyColumn(
@@ -508,13 +493,20 @@ fun ContentMain(
                     mutableFloatStateOf(calculateAspectRatio(context, img) ?: 1f)
                 }
                 if (isVideo(context, img)) {
-                    VideoPlayer(
-                        uri = img,
-                        modifier = Modifier
-                            .height(400.dp)
-                            .width(180.dp)
-                            .aspectRatio(aspectRatio)
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        VideoPlayer(
+                            uri = img,
+                            modifier = Modifier
+                                .fillMaxSize(0.7f)
+                                .aspectRatio(aspectRatio)
+                                .clip(RoundedCornerShape(10, 3, 3, 10))
+                                .background(brush)
+                                .padding(4.dp)
+                        )
+                    }
                 } else {
 
                     Column(
@@ -529,8 +521,6 @@ fun ContentMain(
                                 .clip(RoundedCornerShape(10, 3, 3, 10))
                                 .background(brush)
                                 .padding(4.dp)
-
-
                         ) {
                             CoilImage(
                                 imageModel = { img },
@@ -545,18 +535,14 @@ fun ContentMain(
                         }
                     }
                 }
-
-
             }
         }
     }
-
 
     Column(
         verticalArrangement = Arrangement.Bottom,
         modifier = Modifier.fillMaxHeight()
     ) {
-
         TextField(
             value = textField,
             onValueChange = { textField = it },
@@ -617,7 +603,6 @@ fun ContentMain(
                         tint = Color(0xFF707F92)
                     )
                 }
-
             },
             suffix = {
                 IconButton(
@@ -645,7 +630,6 @@ fun ContentMain(
                                     }
                                 )
                             }
-
                         }
                     },
                     modifier = Modifier
@@ -701,8 +685,6 @@ fun SheetContent(
     innerPadding: PaddingValues
 ) {
     var openUri = remember { mutableStateListOf<Uri>() }
-
-
     val videoCount = selected.count { isVideo(context, it) }
     val photoCount = selected.size - videoCount
 
@@ -743,7 +725,6 @@ fun SheetContent(
                     ""
                 }
             }
-
             Text(
                 text = text,
                 fontSize = 22.sp,
@@ -751,9 +732,6 @@ fun SheetContent(
                 color = Color.White
             )
         }
-
-
-
 
         LazyVerticalGrid(
             state = stateLazyVerticalGrid,
@@ -796,7 +774,6 @@ fun SheetContent(
                                 .clickable { openUri.add(uri) }
                         )
                     } else {
-
                         CoilImage(
                             imageModel = { uri },
                             imageOptions = ImageOptions(
@@ -830,7 +807,6 @@ fun SheetContent(
         }
     }
 
-
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     val context = LocalContext.current
@@ -852,9 +828,7 @@ fun SheetContent(
         )
     }
 
-
     if (openUri.isNotEmpty()) {
-
 
         Dialog(
             onDismissRequest = { openUri.clear() },
@@ -930,7 +904,6 @@ fun SheetContent(
                     )
                 }
             }
-
         }
     }
 }
@@ -945,7 +918,6 @@ fun CircleCheckBox(
     borderWidth: Dp = 2.dp,
     countFiles: Int
 ) {
-
 
     Box(
         modifier = modifier
@@ -983,7 +955,6 @@ fun VideoPreview(
 ) {
     val context = LocalContext.current
 
-    // Проверяем, что это точно видео
     val mime = remember(uri) { context.contentResolver.getType(uri) }
     val isVideo = mime?.startsWith("video") == true
 
@@ -997,7 +968,6 @@ fun VideoPreview(
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     context.contentResolver.loadThumbnail(uri, Size(480, 480), null)
                 } else {
-                    // Правильный способ получить ID
                     val id = ContentUris.parseId(uri)
                     MediaStore.Video.Thumbnails.getThumbnail(
                         context.contentResolver,
@@ -1007,15 +977,12 @@ fun VideoPreview(
                     )
                 }
             } catch (e: FileNotFoundException) {
-                // эскиз не найден — пропускаем
                 Log.w("VideoPreview", "Thumbnail not found for $uri", e)
                 null
             } catch (e: SecurityException) {
-                // нет разрешения
                 Log.e("VideoPreview", "No permission to read $uri", e)
                 null
             } catch (e: Exception) {
-                // что‑то ещё пошло не так
                 Log.e("VideoPreview", "Error loading thumbnail for $uri", e)
                 null
             }
@@ -1024,7 +991,6 @@ fun VideoPreview(
 
     Box(modifier = modifier) {
         if (bitmap != null) {
-            // показываем эскиз
             Image(
                 bitmap = bitmap!!.asImageBitmap(),
                 contentDescription = "Video preview",
@@ -1032,7 +998,6 @@ fun VideoPreview(
                 modifier = Modifier.fillMaxSize()
             )
         } else if (placeholder != null) {
-            // или плейсхолдер, если передали
             Image(
                 painter = placeholder,
                 contentDescription = null,
@@ -1042,7 +1007,6 @@ fun VideoPreview(
         }
 
         if (bitmap != null || placeholder != null) {
-            // кнопка Play поверх картинки/плейсхолдера
             Icon(
                 painter = painterResource(R.drawable.baseline_play_arrow_24),
                 contentDescription = null,
@@ -1063,7 +1027,6 @@ fun VideoPlayer(
     playWhenReady: Boolean = false
 ) {
     val context = LocalContext.current
-
     val exoPlayer = remember {
         ExoPlayer.Builder(context)
             .build()
