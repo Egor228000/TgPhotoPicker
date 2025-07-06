@@ -7,6 +7,7 @@ import android.content.ContentUris
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -41,10 +42,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -52,6 +55,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -96,6 +100,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.LinearGradientShader
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
@@ -111,6 +116,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -122,6 +128,7 @@ import com.skydoves.landscapist.ImageOptions
 import com.skydoves.landscapist.coil.CoilImage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.FileNotFoundException
@@ -230,7 +237,8 @@ fun Main() {
                 PanelRow()
             }
         },
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier
+            .imePadding()
     ) { innerPadding ->
         BottomSheetScaffold(
             scaffoldState = scaffoldState,
@@ -469,7 +477,9 @@ fun ContentMain(
 ) {
     var textField by remember { mutableStateOf("") }
 
-    Box {
+    Box(
+        modifier = Modifier
+    ) {
         Image(
             painter = painterResource(R.drawable.d2bfd3ea45910c01255ae022181148c4),
             null,
@@ -485,59 +495,62 @@ fun ContentMain(
             start = Offset(2f, 2f),
             end = Offset(2f, y + 200f)  // например, градиент по вертикали на 200px
         )
+
         LazyColumn(
             modifier = Modifier
-                .padding(16.dp)
+                .padding(16.dp),
+            contentPadding = PaddingValues(bottom = 64.dp)
 
         ) {
-            item {
+            items(selectedVisible) { img ->
 
-                selectedVisible.forEach { img ->
-                    if (isVideo(context, img)) {
-                        VideoPlayer(
-                            uri = img,
-                            modifier = Modifier
-                                .height(300.dp)
-                                .fillMaxWidth(1f)
-                        )
-                    } else {
-                        Column(
-                            horizontalAlignment = Alignment.End,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Card(
-                                shape = RoundedCornerShape(10, 5, 5, 10),
-                                modifier = Modifier
-                                    .height(400.dp)
-                                    .width(180.dp)
-                                    .clip( RoundedCornerShape(10, 5, 5, 10))
-                                    .background(brush)
-                                    .padding(4.dp)
-
-                            ) {
-                                CoilImage(
-                                    imageModel = { img },
-                                    imageOptions = ImageOptions(
-                                        contentScale = ContentScale.Crop,
-                                        alignment = Alignment.Center
-                                    ),
-                                    modifier = Modifier
-                                        .height(400.dp)
-                                        .width(180.dp)
-
-                                )
-                            }
-                        }
-
-
-                    }
-
+                val aspectRatio by remember(img) {
+                    mutableFloatStateOf(calculateAspectRatio(context, img) ?: 1f)
                 }
+                if (isVideo(context, img)) {
+                    VideoPlayer(
+                        uri = img,
+                        modifier = Modifier
+                            .height(400.dp)
+                            .width(180.dp)
+                            .aspectRatio(aspectRatio)
+                    )
+                } else {
+
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Card(
+                            shape = RoundedCornerShape(10, 3, 3, 10),
+                            modifier = Modifier
+                                .fillMaxSize(0.7f)
+                                .aspectRatio(aspectRatio)
+                                .clip(RoundedCornerShape(10, 3, 3, 10))
+                                .background(brush)
+                                .padding(4.dp)
+
+
+                        ) {
+                            CoilImage(
+                                imageModel = { img },
+                                imageOptions = ImageOptions(
+                                    contentScale = ContentScale.Crop,
+                                    alignment = Alignment.Center
+                                ),
+                                modifier = Modifier
+
+
+                            )
+                        }
+                    }
+                }
+
+
             }
-
         }
-
     }
+
 
     Column(
         verticalArrangement = Arrangement.Bottom,
@@ -548,6 +561,7 @@ fun ContentMain(
             value = textField,
             onValueChange = { textField = it },
             modifier = Modifier
+
                 .height(60.dp)
                 .fillMaxWidth(1f),
             maxLines = 1,
@@ -653,6 +667,28 @@ fun ContentMain(
     }
 }
 
+fun calculateAspectRatio(context: Context, imageUri: Uri): Float? {
+    return try {
+        context.contentResolver.openInputStream(imageUri)?.use { inputStream ->
+            val options = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            BitmapFactory.decodeStream(inputStream, null, options)
+
+            val width = options.outWidth
+            val height = options.outHeight
+
+            if (width > 0 && height > 0) {
+                width.toFloat() / height.toFloat()
+            } else {
+                null
+            }
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
