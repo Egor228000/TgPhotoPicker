@@ -1,6 +1,7 @@
 package com.example.tgphotopicker
 
 import android.Manifest
+import android.R.attr.onClick
 import android.content.ContentUris
 import android.content.Context
 import android.content.pm.PackageManager
@@ -9,6 +10,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.util.Log
 import android.util.Size
 import android.view.ViewGroup
 import androidx.activity.ComponentActivity
@@ -42,6 +44,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -59,6 +63,7 @@ import androidx.compose.material3.BottomSheetScaffoldState
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -87,10 +92,12 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -117,15 +124,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.FileNotFoundException
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
-            TgPhotoPickerTheme {
                 Main()
-            }
         }
     }
 }
@@ -135,6 +141,8 @@ class MainActivity : ComponentActivity() {
 fun Main() {
     val images = remember { mutableStateListOf<Uri>() }
     val selected = remember { mutableStateListOf<Uri>() }
+    var selectedVisible = remember { mutableStateListOf<Uri>() }
+
     var stateLazyVerticalGrid = rememberLazyGridState()
 
     val context = LocalContext.current
@@ -185,10 +193,11 @@ fun Main() {
     val expanded by remember {
         derivedStateOf {
             scaffoldState.bottomSheetState.currentValue == SheetValue.PartiallyExpanded
-
+                    || selected.isNotEmpty()
 
         }
     }
+    var listSelected by remember { mutableStateOf("") }
     Scaffold(
         bottomBar = {
             AnimatedVisibility(
@@ -202,7 +211,11 @@ fun Main() {
                     animationSpec = tween(durationMillis = 300)
                 )
             ) {
-                PanelRow()
+                if (selected.isNotEmpty()) {
+                    PanelSend(selected, selectedVisible, bottomSheetState)
+                } else {
+                    PanelRow()
+                }
             }
         },
         modifier = Modifier.fillMaxSize()
@@ -245,17 +258,127 @@ fun Main() {
                 coroutineScope,
                 hasPermission,
                 scaffoldState,
-                permissionLauncher
+                permissionLauncher,
+                selectedVisible
             )
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PanelSend(
+    selected: SnapshotStateList<Uri>,
+    selectedVisible: SnapshotStateList<Uri>,
+    bottomSheetState:  SheetState
+) {
+    var textField by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+    ) {
+
+        TextField(
+            value = textField,
+            onValueChange = { textField = it },
+            modifier = Modifier
+                .height(65.dp)
+                .fillMaxWidth(1f),
+            maxLines = 1,
+            shape = RoundedCornerShape(0.dp),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color(0xFF202F41),
+                unfocusedContainerColor = Color(0xFF202F41),
+                unfocusedIndicatorColor = Color(0xFF202F41),
+                focusedIndicatorColor = Color(0xFF202F41),
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White
+
+            ),
+            textStyle = TextStyle(fontSize = 25.sp),
+            placeholder = {
+                Text(
+                    "Добавить подпись...",
+                    color = Color(0xFF707F92),
+                    fontSize = 20.sp
+                )
+            },
+            leadingIcon = {
+                IconButton(
+                    onClick = {
+                    },
+                    modifier = Modifier
+                        .graphicsLayer(
+                            translationY = -35f
+                        )
+
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.outline_emoji_language_24),
+                        null,
+                        modifier = Modifier
+                            .size(30.dp),
+                        tint = Color(0xFF707F92)
+                    )
+                }
+
+            },
+        )
+        FloatingActionButton(
+            onClick = {
+                scope.launch {
+                    selectedVisible.addAll(selected)
+                    selected.clear()
+                    bottomSheetState.hide()
+
+                }
+
+
+            },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .graphicsLayer(
+                    translationY = -80f,
+                    translationX = -30f
+                )
+                .size(64.dp),
+            shape = CircleShape,
+            containerColor = Color(0xFF199AF8)
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.baseline_send_24),
+                contentDescription = null,
+                tint = Color.White
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .size(30.dp)
+                .align(Alignment.TopEnd)
+                .offset(x = (-4).dp, y = 8.dp)
+                .background(Color(0xFF199AF8), CircleShape)
+                .border(2.dp, Color(0xFF202F41), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = selected.size.toString(),
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+
 @Composable
 fun PanelRow() {
     Card(
         modifier = Modifier
-            .height(100.dp)
+            .height(110.dp)
             .fillMaxWidth(),
         colors = CardDefaults.cardColors(Color(0xFF202C3A)),
         shape = RoundedCornerShape(0.dp)
@@ -334,7 +457,8 @@ fun ContentMain(
     coroutineScope: CoroutineScope,
     hasPermission: Boolean,
     scaffoldState: BottomSheetScaffoldState,
-    permissionLauncher: ManagedActivityResultLauncher<String, Boolean>
+    permissionLauncher: ManagedActivityResultLauncher<String, Boolean>,
+    selectedVisible: SnapshotStateList<Uri>
 ) {
     var textField by remember { mutableStateOf("") }
 
@@ -353,7 +477,7 @@ fun ContentMain(
         ) {
             item {
 
-                selected.forEach { img ->
+                selectedVisible.forEach { img ->
                     if (isVideo(context, img)) {
                         VideoPlayer(
                             uri = img,
@@ -547,7 +671,9 @@ fun SheetContent(
                     "$verb ${selected.size} $noun"
                 }
 
-                else -> {""}
+                else -> {
+                    ""
+                }
             }
 
             Text(
@@ -781,67 +907,83 @@ fun CircleCheckBox(
 @Composable
 fun VideoPreview(
     uri: Uri,
-    modifier: Modifier
+    modifier: Modifier = Modifier,
+    placeholder: Painter? = null
 ) {
     val context = LocalContext.current
 
-    // Загружаем кадр из видео в фоне
-    val bitmap by produceState<Bitmap?>(initialValue = null, uri) {
+    // Проверяем, что это точно видео
+    val mime = remember(uri) { context.contentResolver.getType(uri) }
+    val isVideo = mime?.startsWith("video") == true
+
+    val bitmap by produceState<Bitmap?>(initialValue = null, key1 = uri) {
+        if (!isVideo) {
+            value = null
+            return@produceState
+        }
         value = withContext(Dispatchers.IO) {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    // API 29+: есть удобный метод loadThumbnail
-                    context.contentResolver.loadThumbnail(
-                        uri,
-                        Size(480, 480),
+                    context.contentResolver.loadThumbnail(uri, Size(480, 480), null)
+                } else {
+                    // Правильный способ получить ID
+                    val id = ContentUris.parseId(uri)
+                    MediaStore.Video.Thumbnails.getThumbnail(
+                        context.contentResolver,
+                        id,
+                        MediaStore.Video.Thumbnails.MINI_KIND,
                         null
                     )
-                } else {
-                    val id = uri.lastPathSegment?.toLongOrNull()
-                    if (id != null) {
-                        MediaStore.Video.Thumbnails.getThumbnail(
-                            context.contentResolver,
-                            id,
-                            MediaStore.Video.Thumbnails.MINI_KIND,
-                            null
-                        )
-                    } else null
                 }
+            } catch (e: FileNotFoundException) {
+                // эскиз не найден — пропускаем
+                Log.w("VideoPreview", "Thumbnail not found for $uri", e)
+                null
+            } catch (e: SecurityException) {
+                // нет разрешения
+                Log.e("VideoPreview", "No permission to read $uri", e)
+                null
             } catch (e: Exception) {
-                e.printStackTrace()
+                // что‑то ещё пошло не так
+                Log.e("VideoPreview", "Error loading thumbnail for $uri", e)
                 null
             }
         }
     }
 
-    bitmap?.let {
-        Box(
-            modifier = modifier
-        ) {
+    Box(modifier = modifier) {
+        if (bitmap != null) {
+            // показываем эскиз
             Image(
-                bitmap = it.asImageBitmap(),
+                bitmap = bitmap!!.asImageBitmap(),
                 contentDescription = "Video preview",
-                modifier = Modifier
-                    .size(200.dp),
-                contentScale = ContentScale.Crop
-            )
-            Column(
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
+                contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.baseline_play_arrow_24),
-                    null,
-                    tint = Color.White,
-                    modifier = Modifier.size(48.dp)
-                )
-            }
-
+            )
+        } else if (placeholder != null) {
+            // или плейсхолдер, если передали
+            Image(
+                painter = placeholder,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
         }
 
+        if (bitmap != null || placeholder != null) {
+            // кнопка Play поверх картинки/плейсхолдера
+            Icon(
+                painter = painterResource(R.drawable.baseline_play_arrow_24),
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier
+                    .size(48.dp)
+                    .align(Alignment.Center)
+            )
+        }
     }
 }
+
 
 @Composable
 fun VideoPlayer(
