@@ -1,7 +1,8 @@
 package com.example.tgphotopicker
 
 import android.Manifest
-import android.R.attr.onClick
+import android.R.attr.x
+import android.R.attr.y
 import android.content.ContentUris
 import android.content.Context
 import android.content.pm.PackageManager
@@ -44,7 +45,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -92,9 +92,10 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.LinearGradientShader
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
@@ -117,7 +118,6 @@ import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
-import com.example.tgphotopicker.ui.theme.TgPhotoPickerTheme
 import com.skydoves.landscapist.ImageOptions
 import com.skydoves.landscapist.coil.CoilImage
 import kotlinx.coroutines.CoroutineScope
@@ -131,7 +131,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
-                Main()
+            Main()
         }
     }
 }
@@ -197,25 +197,37 @@ fun Main() {
 
         }
     }
-    var listSelected by remember { mutableStateOf("") }
+
     Scaffold(
         bottomBar = {
+            // 1) Панель отправки — только когда лист развернут И есть selection
             AnimatedVisibility(
-                visible = expanded,
+                visible = expanded && selected.isNotEmpty(),
                 enter = slideInVertically(
-                    initialOffsetY = { fullHeight -> fullHeight },
-                    animationSpec = tween(durationMillis = 300)
+                    initialOffsetY = { it },
+                    animationSpec = tween(300)
                 ),
                 exit = slideOutVertically(
-                    targetOffsetY = { fullHeight -> fullHeight },
-                    animationSpec = tween(durationMillis = 300)
+                    targetOffsetY = { it },
+                    animationSpec = tween(300)
                 )
             ) {
-                if (selected.isNotEmpty()) {
-                    PanelSend(selected, selectedVisible, bottomSheetState)
-                } else {
-                    PanelRow()
-                }
+                PanelSend(selected, selectedVisible, bottomSheetState)
+            }
+
+
+            AnimatedVisibility(
+                visible = expanded && selected.isEmpty(),
+                enter = slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(300)
+                ),
+                exit = slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(300)
+                )
+            ) {
+                PanelRow()
             }
         },
         modifier = Modifier.fillMaxSize()
@@ -253,7 +265,6 @@ fun Main() {
             }
         ) {
             ContentMain(
-                selected,
                 context,
                 coroutineScope,
                 hasPermission,
@@ -270,7 +281,7 @@ fun Main() {
 fun PanelSend(
     selected: SnapshotStateList<Uri>,
     selectedVisible: SnapshotStateList<Uri>,
-    bottomSheetState:  SheetState
+    bottomSheetState: SheetState
 ) {
     var textField by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
@@ -329,13 +340,10 @@ fun PanelSend(
         FloatingActionButton(
             onClick = {
                 scope.launch {
+                    bottomSheetState.hide()
                     selectedVisible.addAll(selected)
                     selected.clear()
-                    bottomSheetState.hide()
-
                 }
-
-
             },
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -452,7 +460,6 @@ fun PanelRow() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContentMain(
-    selected: SnapshotStateList<Uri>,
     context: Context,
     coroutineScope: CoroutineScope,
     hasPermission: Boolean,
@@ -470,6 +477,14 @@ fun ContentMain(
             modifier = Modifier.fillMaxSize()
 
         )
+        val brush = Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF8A7EE3),
+                Color(0xFFC953BD)
+            ),
+            start = Offset(2f, 2f),
+            end = Offset(2f, y + 200f)  // например, градиент по вертикали на 200px
+        )
         LazyColumn(
             modifier = Modifier
                 .padding(16.dp)
@@ -486,18 +501,35 @@ fun ContentMain(
                                 .fillMaxWidth(1f)
                         )
                     } else {
-                        CoilImage(
-                            imageModel = { img },
-                            imageOptions = ImageOptions(
-                                contentScale = ContentScale.Crop,
-                                alignment = Alignment.Center
-                            ),
-                            modifier = Modifier
-                                .height(300.dp)
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Card(
+                                shape = RoundedCornerShape(10, 5, 5, 10),
+                                modifier = Modifier
+                                    .height(400.dp)
+                                    .width(180.dp)
+                                    .clip( RoundedCornerShape(10, 5, 5, 10))
+                                    .background(brush)
+                                    .padding(4.dp)
 
-                                .fillMaxWidth(1f)
+                            ) {
+                                CoilImage(
+                                    imageModel = { img },
+                                    imageOptions = ImageOptions(
+                                        contentScale = ContentScale.Crop,
+                                        alignment = Alignment.Center
+                                    ),
+                                    modifier = Modifier
+                                        .height(400.dp)
+                                        .width(180.dp)
 
-                        )
+                                )
+                            }
+                        }
+
+
                     }
 
                 }
@@ -679,7 +711,8 @@ fun SheetContent(
             Text(
                 text = text,
                 fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = Color.White
             )
         }
 
@@ -706,7 +739,7 @@ fun SheetContent(
                 val isVideo = isVideo(context, uri)
 
                 val scale by animateFloatAsState(
-                    targetValue = if (isSelected) 0.7f else 1f,
+                    targetValue = if (isSelected) 0.9f else 1f,
                     animationSpec = spring(dampingRatio = 0.6f)
                 )
 
@@ -897,7 +930,9 @@ fun CircleCheckBox(
             Text(
                 countFiles.toString(), color = Color.White,
                 modifier = Modifier
-                    .align(Alignment.Center)
+                    .align(Alignment.Center),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
             )
         }
 
