@@ -511,11 +511,12 @@ fun SheetContent(
     var openUri = remember { mutableStateListOf<Uri>() }
 
 
-    val photoCount = selected.count { !isVideo(context, it) }
     val videoCount = selected.count { isVideo(context, it) }
-    var isVideoText = photoCount == 0 && videoCount > 0
-    val isMixedMedia = photoCount > 0 && videoCount > 0
+    val photoCount = selected.size - videoCount
 
+    val isOnlyVideo = videoCount > 0 && photoCount == 0
+    val isOnlyPhoto = photoCount > 0 && videoCount == 0
+    val isMixed = videoCount > 0 && photoCount > 0
     LaunchedEffect(bottomSheetState) {
         loadMedia(context, images)
     }
@@ -534,17 +535,19 @@ fun SheetContent(
             modifier = Modifier.padding(horizontal = 8.dp)
         ) {
             val text = when {
-                isMixedMedia -> {
-                    "Выбрано ${selected.size} медиафайл${pluralEnding(selected.size)}"
+                isMixed -> "Выбрано ${selected.size} медиафайл${pluralEnding(selected.size)}"
+                isOnlyVideo -> "Выбрано ${selected.size} видео"
+                isOnlyPhoto -> {
+                    val verb = if (selected.size == 1) "Выбрана" else "Выбрано"
+                    val noun = when {
+                        selected.size % 10 == 1 && selected.size % 100 != 11 -> "фотография"
+                        selected.size % 10 in 2..4 && selected.size % 100 !in 12..14 -> "фотографии"
+                        else -> "фотографий"
+                    }
+                    "$verb ${selected.size} $noun"
                 }
 
-                isVideoText -> {
-                    "Выбрано ${selected.size} виде${pluralEnding(selected.size, "о", "о", "о")}"
-                }
-
-                else -> {
-                    "Выбран${photoVerbEnding(selected.size)} ${selected.size} фотограф${photoNounEnding(selected.size)}"
-                }
+                else -> {""}
             }
 
             Text(
@@ -575,7 +578,6 @@ fun SheetContent(
                 val isSelected = uri in selected
                 val selectionIndex = if (isSelected) selected.indexOf(uri) + 1 else 0
                 val isVideo = isVideo(context, uri)
-                isVideoText = isVideo
 
                 val scale by animateFloatAsState(
                     targetValue = if (isSelected) 0.7f else 1f,
