@@ -32,13 +32,16 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -48,10 +51,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.BottomSheetScaffold
@@ -64,6 +72,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheetDefaults.properties
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
@@ -77,6 +86,7 @@ import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -90,9 +100,11 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -143,6 +155,7 @@ class MainActivity : ComponentActivity() {
 fun Main() {
     val images = remember { mutableStateListOf<Uri>() }
     val selected = remember { mutableStateListOf<Uri>() }
+    var stateLazyVerticalGrid = rememberLazyGridState()
 
     val context = LocalContext.current
     var hasPermission by remember {
@@ -189,39 +202,150 @@ fun Main() {
     )
     val coroutineScope = rememberCoroutineScope()
 
+    val expanded by remember {
+        derivedStateOf {
+            scaffoldState.bottomSheetState.currentValue == SheetValue.PartiallyExpanded
 
-    BottomSheetScaffold(
-        scaffoldState = scaffoldState,
-        sheetContent = {
-            SheetContent(
-                context,
-                images,
-                selected,
-                bottomSheetState
-            )
+
+        }
+    }
+    Scaffold(
+        bottomBar = {
+            // AnimatedVisibility слайдит панель вверх/вниз
+            AnimatedVisibility(
+                visible = expanded,
+                enter = slideInVertically(
+                    // стартуем снизу за пределами экрана
+                    initialOffsetY = { fullHeight -> fullHeight },
+                    animationSpec = tween(durationMillis = 300)
+                ),
+                exit = slideOutVertically(
+                    // уход вниз на свою высоту
+                    targetOffsetY = { fullHeight -> fullHeight },
+                    animationSpec = tween(durationMillis = 300)
+                )
+            ) {
+                PanelRow()
+            }
         },
-        sheetContainerColor = Color(0xFF212D3B),
-        modifier = Modifier,
-        sheetPeekHeight = 570.dp,
-        sheetShape = RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp),
-        sheetSwipeEnabled = true,
-        topBar = {
-            TopAppBar(
-                title = { Text("Photo Picker", color = Color.White) },
-                colors = TopAppBarDefaults.topAppBarColors(Color(0xFF202F41))
+        modifier = Modifier.fillMaxSize()
+    ) { innerPadding ->
+        BottomSheetScaffold(
+            scaffoldState = scaffoldState,
+            sheetContent = {
+                Box(
+                    modifier = Modifier.padding(innerPadding)
+                ) {
+                    SheetContent(
+                        context,
+                        images,
+                        selected,
+                        bottomSheetState,
+                        stateLazyVerticalGrid
+                    )
 
+                }
+
+
+            },
+            sheetContainerColor = Color(0xFF212D3B),
+            sheetPeekHeight = 500.dp,
+            sheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+            sheetSwipeEnabled = true,
+            topBar = {
+                TopAppBar(
+                    title = { Text("Photo Picker", color = Color.White) },
+                    colors = TopAppBarDefaults.topAppBarColors(Color(0xFF202F41))
+
+                )
+            }
+        ) {
+            ContentMain(
+                selected,
+                context,
+                coroutineScope,
+                hasPermission,
+                scaffoldState,
+                permissionLauncher
             )
         }
-    ) {
-        ContentMain(
-            selected,
-            context,
-            coroutineScope,
-            hasPermission,
-            scaffoldState,
-            permissionLauncher
-        )
     }
+}
+
+@Composable
+fun PanelRow() {
+    Card(
+        modifier = Modifier
+            .height(100.dp)
+            .fillMaxWidth(),
+        colors = CardDefaults.cardColors(Color(0xFF202C3A)),
+        shape = RoundedCornerShape(0.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+        ) {
+            val listIcon = listOf(
+                R.drawable.outline_image_24,
+                R.drawable.outline_file_copy_24,
+                R.drawable.outline_location_on_24,
+                R.drawable.baseline_person_24
+            )
+            val listColor = listOf(
+                Color(0xFF4C94F4),
+                Color(0xFF58BBF3),
+                Color(0xFF60C256),
+                Color(0xFFDAAD44)
+
+            )
+            val listName = listOf(
+                "Галерея",
+                "Файлы",
+                "Геолокация",
+                "Контакты"
+            )
+
+            listIcon.indices.forEach { index ->
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .padding(16.dp)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50.dp))
+                            .background(listColor[index])
+                            .size(50.dp)
+                            .clickable {
+                                // Обработка нажатия
+                            }
+                    ) {
+                        Icon(
+                            painter = painterResource(id = listIcon[index]),
+                            contentDescription = listName[index],
+                            tint = Color.White,
+                            modifier = Modifier.size(32.dp)
+                        )
+
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    Text(
+                        text = listName[index],
+                        fontSize = 14.sp,
+                        color = Color(0xFF75818F)
+                    )
+                }
+            }
+        }
+
+    }
+
+
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -261,15 +385,12 @@ fun ContentMain(
                         )
                     } else {
                         CoilImage(
-                            imageModel = { img }, // loading a network image or local resource using an URL.
+                            imageModel = { img },
                             imageOptions = ImageOptions(
                                 contentScale = ContentScale.Crop,
                                 alignment = Alignment.Center
                             ),
                             modifier = Modifier
-                                .clickable(onClick = {
-
-                                })
                                 .height(300.dp)
 
                                 .fillMaxWidth(1f)
@@ -406,6 +527,7 @@ fun SheetContent(
     images: SnapshotStateList<Uri>,
     selected: SnapshotStateList<Uri>,
     bottomSheetState: SheetState,
+    stateLazyVerticalGrid: LazyGridState
 ) {
     var openUri = remember { mutableStateListOf<Uri>() }
 
@@ -420,12 +542,20 @@ fun SheetContent(
 
 
     LazyVerticalGrid(
+        state = stateLazyVerticalGrid,
         verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         columns = GridCells.Fixed(3),
         contentPadding = PaddingValues(horizontal = 8.dp),
+        modifier = Modifier
     ) {
-        items(images) { uri ->
+        itemsIndexed(images) { index, uri ->
+            val cornerShape = when (index) {
+                0 -> RoundedCornerShape(topStart = 10.dp)
+                2 -> RoundedCornerShape(topEnd = 10.dp)
+                else -> RoundedCornerShape(0.dp)
+            }
+
             val isSelected = uri in selected
             val selectionIndex = if (isSelected) selected.indexOf(uri) + 1 else 0
             val isVideo = isVideo(context, uri)
@@ -466,6 +596,7 @@ fun SheetContent(
                                 scaleY = scale
                             }
                             .clickable { openUri.add(uri) }
+                            .clip(cornerShape)
                     )
                 }
 
@@ -598,14 +729,14 @@ fun CircleCheckBox(
     modifier: Modifier = Modifier,
     checkedColor: Color = Color(0xFF0A9FFA),
     uncheckedColor: Color = Color.White,
-    borderWidth: Dp = 1.5.dp,
+    borderWidth: Dp = 2.dp,
     countFiles: Int
 ) {
 
 
     Box(
         modifier = modifier
-            .size(24.dp)
+            .size(26.dp)
             .clip(CircleShape)
             .border(
                 width = borderWidth,
