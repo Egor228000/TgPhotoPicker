@@ -19,8 +19,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -32,12 +30,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -53,29 +49,21 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.BottomSheetScaffoldState
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheetDefaults.properties
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.SheetValue
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -89,22 +77,18 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -115,7 +99,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -128,15 +111,12 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.example.tgphotopicker.ui.theme.TgPhotoPickerTheme
-import com.google.common.math.Quantiles.scale
 import com.skydoves.landscapist.ImageOptions
 import com.skydoves.landscapist.coil.CoilImage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.time.InstantSource.offset
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -211,16 +191,13 @@ fun Main() {
     }
     Scaffold(
         bottomBar = {
-            // AnimatedVisibility слайдит панель вверх/вниз
             AnimatedVisibility(
                 visible = expanded,
                 enter = slideInVertically(
-                    // стартуем снизу за пределами экрана
                     initialOffsetY = { fullHeight -> fullHeight },
                     animationSpec = tween(durationMillis = 300)
                 ),
                 exit = slideOutVertically(
-                    // уход вниз на свою высоту
                     targetOffsetY = { fullHeight -> fullHeight },
                     animationSpec = tween(durationMillis = 300)
                 )
@@ -234,14 +211,15 @@ fun Main() {
             scaffoldState = scaffoldState,
             sheetContent = {
                 Box(
-                    modifier = Modifier.padding(innerPadding)
+
                 ) {
                     SheetContent(
                         context,
                         images,
                         selected,
                         bottomSheetState,
-                        stateLazyVerticalGrid
+                        stateLazyVerticalGrid,
+                        innerPadding
                     )
 
                 }
@@ -252,6 +230,7 @@ fun Main() {
             sheetPeekHeight = 500.dp,
             sheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
             sheetSwipeEnabled = true,
+
             topBar = {
                 TopAppBar(
                     title = { Text("Photo Picker", color = Color.White) },
@@ -321,7 +300,6 @@ fun PanelRow() {
                             .background(listColor[index])
                             .size(50.dp)
                             .clickable {
-                                // Обработка нажатия
                             }
                     ) {
                         Icon(
@@ -527,90 +505,130 @@ fun SheetContent(
     images: SnapshotStateList<Uri>,
     selected: SnapshotStateList<Uri>,
     bottomSheetState: SheetState,
-    stateLazyVerticalGrid: LazyGridState
+    stateLazyVerticalGrid: LazyGridState,
+    innerPadding: PaddingValues
 ) {
     var openUri = remember { mutableStateListOf<Uri>() }
 
 
-
+    val photoCount = selected.count { !isVideo(context, it) }
+    val videoCount = selected.count { isVideo(context, it) }
+    var isVideoText = photoCount == 0 && videoCount > 0
+    val isMixedMedia = photoCount > 0 && videoCount > 0
 
     LaunchedEffect(bottomSheetState) {
         loadMedia(context, images)
     }
 
-
-
-
-    LazyVerticalGrid(
-        state = stateLazyVerticalGrid,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        columns = GridCells.Fixed(3),
-        contentPadding = PaddingValues(horizontal = 8.dp),
-        modifier = Modifier
-    ) {
-        itemsIndexed(images) { index, uri ->
-            val cornerShape = when (index) {
-                0 -> RoundedCornerShape(topStart = 10.dp)
-                2 -> RoundedCornerShape(topEnd = 10.dp)
-                else -> RoundedCornerShape(0.dp)
-            }
-
-            val isSelected = uri in selected
-            val selectionIndex = if (isSelected) selected.indexOf(uri) + 1 else 0
-            val isVideo = isVideo(context, uri)
-
-            val scale by animateFloatAsState(
-                targetValue = if (isSelected) 0.7f else 1f,
-                animationSpec = spring(dampingRatio = 0.6f)
-            )
-
-            Box(
-                modifier = Modifier
-                    .width(150.dp)
-                    .height(120.dp)
-            ) {
-                if (isVideo) {
-                    VideoPreview(
-                        uri,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                scaleX = scale
-                                scaleY = scale
-                            }
-                            .clickable { openUri.add(uri) }
-                    )
-                } else {
-
-                    CoilImage(
-                        imageModel = { uri },
-                        imageOptions = ImageOptions(
-                            contentScale = ContentScale.Crop,
-                            alignment = Alignment.Center
-                        ),
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                scaleX = scale
-                                scaleY = scale
-                            }
-                            .clickable { openUri.add(uri) }
-                            .clip(cornerShape)
-                    )
+    Column {
+        AnimatedVisibility(
+            visible = selected.isNotEmpty(),
+            enter = slideInVertically(
+                initialOffsetY = { it },
+                animationSpec = tween(durationMillis = 300)
+            ),
+            exit = slideOutVertically(
+                targetOffsetY = { it },
+                animationSpec = tween(durationMillis = 300)
+            ),
+            modifier = Modifier.padding(horizontal = 8.dp)
+        ) {
+            val text = when {
+                isMixedMedia -> {
+                    "Выбрано ${selected.size} медиафайл${pluralEnding(selected.size)}"
                 }
 
-                CircleCheckBox(
-                    checked = isSelected,
-                    onCheckedChange = { newValue ->
-                        if (newValue) selected.add(uri)
-                        else selected.remove(uri)
-                    },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(4.dp),
-                    countFiles = selectionIndex
+                isVideoText -> {
+                    "Выбрано ${selected.size} виде${pluralEnding(selected.size, "о", "о", "о")}"
+                }
+
+                else -> {
+                    "Выбран${photoVerbEnding(selected.size)} ${selected.size} фотограф${photoNounEnding(selected.size)}"
+                }
+            }
+
+            Text(
+                text = text,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+
+
+
+        LazyVerticalGrid(
+            state = stateLazyVerticalGrid,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            columns = GridCells.Fixed(3),
+            contentPadding = PaddingValues(horizontal = 8.dp),
+            modifier = Modifier
+        ) {
+            itemsIndexed(images) { index, uri ->
+                val cornerShape = when (index) {
+                    0 -> RoundedCornerShape(topStart = 10.dp)
+                    2 -> RoundedCornerShape(topEnd = 10.dp)
+                    else -> RoundedCornerShape(0.dp)
+                }
+
+                val isSelected = uri in selected
+                val selectionIndex = if (isSelected) selected.indexOf(uri) + 1 else 0
+                val isVideo = isVideo(context, uri)
+                isVideoText = isVideo
+
+                val scale by animateFloatAsState(
+                    targetValue = if (isSelected) 0.7f else 1f,
+                    animationSpec = spring(dampingRatio = 0.6f)
                 )
+
+                Box(
+                    modifier = Modifier
+                        .width(150.dp)
+                        .height(120.dp)
+                ) {
+                    if (isVideo) {
+                        VideoPreview(
+                            uri,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    scaleX = scale
+                                    scaleY = scale
+                                }
+                                .clickable { openUri.add(uri) }
+                        )
+                    } else {
+
+                        CoilImage(
+                            imageModel = { uri },
+                            imageOptions = ImageOptions(
+                                contentScale = ContentScale.Crop,
+                                alignment = Alignment.Center
+                            ),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    scaleX = scale
+                                    scaleY = scale
+                                }
+                                .clickable { openUri.add(uri) }
+                                .clip(cornerShape)
+                        )
+                    }
+
+                    CircleCheckBox(
+                        checked = isSelected,
+                        onCheckedChange = { newValue ->
+                            if (newValue) selected.add(uri)
+                            else selected.remove(uri)
+                        },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp),
+                        countFiles = selectionIndex
+                    )
+                }
             }
         }
     }
@@ -622,7 +640,6 @@ fun SheetContent(
     val density = LocalDensity.current.density
     var constraints by remember { mutableStateOf(Constraints()) }
 
-    // Рассчитываем границы смещения
     val maxOffsetX = remember(scale, constraints.maxWidth) {
         if (scale <= 1f) 0f else (constraints.maxWidth * (scale - 1) / 2f)
     }
@@ -639,7 +656,6 @@ fun SheetContent(
     }
 
 
-    // Полноэкранный режим просмотраа
     if (openUri.isNotEmpty()) {
 
 
@@ -796,7 +812,6 @@ fun VideoPreview(
         }
     }
 
-    // Просто рендерим картинку — без контролов и без плеера
     bitmap?.let {
         Box(
             modifier = modifier
@@ -834,7 +849,6 @@ fun VideoPlayer(
 ) {
     val context = LocalContext.current
 
-    // 1) Создаём ExoPlayer и настраиваем медиа
     val exoPlayer = remember {
         ExoPlayer.Builder(context)
             .build()
@@ -845,17 +859,15 @@ fun VideoPlayer(
             }
     }
 
-    // 2) Освобождаем плеер, когда Composable уходит из композиции
     DisposableEffect(Unit) {
         onDispose { exoPlayer.release() }
     }
 
-    // 3) Рендерим стандартный PlayerView
     AndroidView(
         factory = { ctx ->
             PlayerView(ctx).apply {
                 player = exoPlayer
-                useController = true       // показывать контролы паузы/прокрутки
+                useController = true
                 layoutParams =
                     ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
@@ -880,7 +892,6 @@ private fun loadMedia(context: Context, mediaList: MutableList<Uri>) {
     val imageUriList = mutableListOf<Pair<Uri, Long>>()
     val videoUriList = mutableListOf<Pair<Uri, Long>>()
 
-    // Загрузка изображений
     context.contentResolver.query(
         MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
         imageProjection,
@@ -899,7 +910,6 @@ private fun loadMedia(context: Context, mediaList: MutableList<Uri>) {
         }
     }
 
-    // Загрузка видео
     context.contentResolver.query(
         MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
         videoProjection,
@@ -918,9 +928,28 @@ private fun loadMedia(context: Context, mediaList: MutableList<Uri>) {
         }
     }
 
-    // Объединяем, сортируем по дате и сохраняем в основной список
     mediaList.clear()
     (imageUriList + videoUriList)
-        .sortedByDescending { it.second } // сортировка по дате (DESC)
+        .sortedByDescending { it.second }
         .mapTo(mediaList) { it.first }
+}
+
+fun pluralEnding(count: Int, one: String = "", few: String = "а", many: String = "ов"): String {
+    return when {
+        count % 10 == 1 && count % 100 != 11 -> one
+        count % 10 in 2..4 && count % 100 !in 12..14 -> few
+        else -> many
+    }
+}
+
+fun photoVerbEnding(count: Int): String {
+    return if (count == 1) "а" else "о"
+}
+
+fun photoNounEnding(count: Int): String {
+    return when {
+        count % 10 == 1 && count % 100 != 11 -> "ия"
+        count % 10 in 2..4 && count % 100 !in 12..14 -> "ии"
+        else -> "ий"
+    }
 }
