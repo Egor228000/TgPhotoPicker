@@ -1157,14 +1157,4 @@ fun pluralEnding(count: Int, one: String = "", few: String = "а", many: String 
     }
 }
 
-fun photoVerbEnding(count: Int): String {
-    return if (count == 1) "а" else "о"
-}
 
-fun photoNounEnding(count: Int): String {
-    return when {
-        count % 10 == 1 && count % 100 != 11 -> "ия"
-        count % 10 in 2..4 && count % 100 !in 12..14 -> "ии"
-        else -> "ий"
-    }
-}
