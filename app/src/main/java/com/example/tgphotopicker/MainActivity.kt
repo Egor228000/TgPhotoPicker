@@ -22,6 +22,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -130,6 +132,7 @@ import kotlinx.coroutines.withContext
 import java.io.FileNotFoundException
 
 class MainActivity : ComponentActivity() {
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -139,6 +142,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Main() {
@@ -149,7 +153,9 @@ fun Main() {
     var stateLazyVerticalGrid = rememberLazyGridState()
 
     val context = LocalContext.current
-    var hasPermission by remember { mutableStateOf(false) }
+    var hasPermission by remember {
+        mutableStateOf(false)
+    }
 
     val mediaPickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia()
@@ -170,39 +176,35 @@ fun Main() {
             val imagesGranted = ContextCompat.checkSelfPermission(
                 context, Manifest.permission.READ_MEDIA_IMAGES
             ) == PackageManager.PERMISSION_GRANTED
+
             val videosGranted = ContextCompat.checkSelfPermission(
                 context, Manifest.permission.READ_MEDIA_VIDEO
             ) == PackageManager.PERMISSION_GRANTED
 
             hasPermission = imagesGranted || videosGranted
 
-            if (!hasPermission) {
+            if (!imagesGranted || !videosGranted) {
                 permissionLauncher.launch(
                     arrayOf(
                         Manifest.permission.READ_MEDIA_IMAGES,
                         Manifest.permission.READ_MEDIA_VIDEO
                     )
                 )
-            } else {
-                mediaPickerLauncher.launch(
-                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
-                )
             }
         } else {
-            val storageGranted = ContextCompat.checkSelfPermission(
+            hasPermission = ContextCompat.checkSelfPermission(
                 context, Manifest.permission.READ_EXTERNAL_STORAGE
             ) == PackageManager.PERMISSION_GRANTED
-
-            hasPermission = storageGranted
 
             if (!hasPermission) {
                 permissionLauncher.launch(
                     arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
                 )
-            } else {
+
             }
         }
     }
+
 
 
     val bottomSheetState = rememberStandardBottomSheetState(
@@ -287,7 +289,8 @@ fun Main() {
                 scaffoldState,
                 permissionLauncher,
                 selectedVisible,
-                selected
+                selected,
+                mediaPickerLauncher
             )
         }
     }
@@ -480,8 +483,10 @@ fun ContentMain(
     permissionLauncher: ManagedActivityResultLauncher<Array<String>, Map<String, @JvmSuppressWildcards Boolean>>,
     selectedVisible: SnapshotStateList<Uri>,
     selected: SnapshotStateList<Uri>,
+    mediaPickerLauncher: ManagedActivityResultLauncher<PickVisualMediaRequest, List<@JvmSuppressWildcards Uri>>
 
-    ) {
+
+) {
     var textField by remember { mutableStateOf("") }
 
     Box(
@@ -643,17 +648,10 @@ fun ContentMain(
                                         scaffoldState.bottomSheetState.show()
                                 }
                             } else {
-                                permissionLauncher.launch(
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                        arrayOf(
-                                            Manifest.permission.READ_MEDIA_IMAGES,
-                                            Manifest.permission.READ_MEDIA_VIDEO
-                                        )
-                                    } else {
-                                        arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-                                    }
-                                )
 
+                                mediaPickerLauncher.launch(
+                                    PickVisualMediaRequest(PickVisualMedia.ImageAndVideo)
+                                )
                             }
                         }
                     },
