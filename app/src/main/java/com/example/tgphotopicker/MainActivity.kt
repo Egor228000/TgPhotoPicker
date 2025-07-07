@@ -20,6 +20,7 @@ import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -148,40 +149,61 @@ fun Main() {
     var stateLazyVerticalGrid = rememberLazyGridState()
 
     val context = LocalContext.current
-    var hasPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context,
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    Manifest.permission.READ_MEDIA_IMAGES
-                    Manifest.permission.READ_MEDIA_VIDEO
+    var hasPermission by remember { mutableStateOf(false) }
 
-                } else {
-                    Manifest.permission.READ_EXTERNAL_STORAGE
-
-                }
-            ) == PackageManager.PERMISSION_GRANTED
-        )
+    val mediaPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia()
+    ) { uris ->
+        if (!uris.isNullOrEmpty()) {
+            images.clear()
+            images.addAll(uris)
+        }
     }
     val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        hasPermission = granted
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        hasPermission = permissions.values.any { it }
     }
 
     LaunchedEffect(Unit) {
-        if (!hasPermission) {
-            permissionLauncher.launch(
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    Manifest.permission.READ_MEDIA_IMAGES
-                    Manifest.permission.READ_MEDIA_VIDEO
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val imagesGranted = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.READ_MEDIA_IMAGES
+            ) == PackageManager.PERMISSION_GRANTED
+            val videosGranted = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.READ_MEDIA_VIDEO
+            ) == PackageManager.PERMISSION_GRANTED
 
-                } else {
-                    Manifest.permission.READ_EXTERNAL_STORAGE
-                }
-            )
+            hasPermission = imagesGranted || videosGranted
+
+            if (!hasPermission) {
+                permissionLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.READ_MEDIA_IMAGES,
+                        Manifest.permission.READ_MEDIA_VIDEO
+                    )
+                )
+            } else {
+                mediaPickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                )
+            }
+        } else {
+            val storageGranted = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+
+            hasPermission = storageGranted
+
+            if (!hasPermission) {
+                permissionLauncher.launch(
+                    arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+                )
+            } else {
+            }
         }
     }
+
 
     val bottomSheetState = rememberStandardBottomSheetState(
         initialValue = SheetValue.Hidden,
@@ -455,7 +477,7 @@ fun ContentMain(
     coroutineScope: CoroutineScope,
     hasPermission: Boolean,
     scaffoldState: BottomSheetScaffoldState,
-    permissionLauncher: ManagedActivityResultLauncher<String, Boolean>,
+    permissionLauncher: ManagedActivityResultLauncher<Array<String>, Map<String, @JvmSuppressWildcards Boolean>>,
     selectedVisible: SnapshotStateList<Uri>,
     selected: SnapshotStateList<Uri>,
 
@@ -482,6 +504,7 @@ fun ContentMain(
         )
 
         LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier
                 .padding(16.dp),
             contentPadding = PaddingValues(bottom = 64.dp)
@@ -622,13 +645,15 @@ fun ContentMain(
                             } else {
                                 permissionLauncher.launch(
                                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                        Manifest.permission.READ_MEDIA_IMAGES
-                                        Manifest.permission.READ_MEDIA_VIDEO
-
+                                        arrayOf(
+                                            Manifest.permission.READ_MEDIA_IMAGES,
+                                            Manifest.permission.READ_MEDIA_VIDEO
+                                        )
                                     } else {
-                                        Manifest.permission.READ_EXTERNAL_STORAGE
+                                        arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
                                     }
                                 )
+
                             }
                         }
                     },
