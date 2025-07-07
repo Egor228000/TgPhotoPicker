@@ -3,6 +3,7 @@ package com.example.tgphotopicker
 import android.Manifest
 import android.R.attr.y
 import android.content.ContentUris
+import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -24,6 +25,12 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.annotation.RequiresApi
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -64,8 +71,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.BottomSheetScaffoldState
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -120,6 +131,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -206,7 +218,6 @@ fun Main() {
     }
 
 
-
     val bottomSheetState = rememberStandardBottomSheetState(
         initialValue = SheetValue.Hidden,
         skipHiddenState = false
@@ -287,13 +298,121 @@ fun Main() {
                 coroutineScope,
                 hasPermission,
                 scaffoldState,
-                permissionLauncher,
                 selectedVisible,
-                selected,
+                images,
                 mediaPickerLauncher
             )
         }
     }
+}
+
+@Composable
+fun CameraXCaptureScreen(
+    onImageCaptured: (Uri) -> Unit,
+    modifier: Modifier = Modifier,
+    images: SnapshotStateList<Uri>
+) {
+    val cameraPermission = Manifest.permission.CAMERA
+    val context = LocalContext.current
+    val hasCameraPermission = ContextCompat.checkSelfPermission(
+        context,
+        cameraPermission
+    ) == PackageManager.PERMISSION_GRANTED
+
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        // Обновить состояние или заново инициализировать камеру
+    }
+
+    LaunchedEffect(Unit) {
+        if (!hasCameraPermission) {
+            launcher.launch(cameraPermission)
+        }
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
+
+    val imageCapture = remember { ImageCapture.Builder().build() }
+
+    val previewView = remember { PreviewView(context) }
+
+    AndroidView(
+        factory = { previewView },
+        modifier = modifier
+            .fillMaxWidth()
+    )
+
+    LaunchedEffect(cameraProviderFuture) {
+        val cameraProvider = cameraProviderFuture.get()
+        val preview = Preview.Builder().build().also {
+            it.setSurfaceProvider(previewView.surfaceProvider)
+        }
+
+        val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+
+        try {
+            cameraProvider.unbindAll()
+            cameraProvider.bindToLifecycle(
+                lifecycleOwner,
+                cameraSelector,
+                preview,
+                imageCapture
+            )
+        } catch (e: Exception) {
+            Log.e("CameraX", "Camera binding failed", e)
+        }
+    }
+    Icon(
+        painter = painterResource(R.drawable.baseline_camera_alt_24),
+        contentDescription = "Сделать фото",
+        tint = Color.White,
+        modifier = Modifier
+            .size(40.dp)
+    )
+    // Кнопка для съёмки
+    /*Button(
+        onClick = {
+            val name = "photo_${System.currentTimeMillis()}.jpg"
+            val contentValues = ContentValues().apply {
+                put(MediaStore.Images.Media.DISPLAY_NAME, name)
+                put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraX-Compose")
+                }
+            }
+
+            val outputOptions = ImageCapture.OutputFileOptions
+                .Builder(
+                    context.contentResolver,
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    contentValues
+                ).build()
+
+            imageCapture.takePicture(
+                outputOptions,
+                ContextCompat.getMainExecutor(context),
+                object : ImageCapture.OnImageSavedCallback {
+                    override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                        outputFileResults.savedUri?.let { uri ->
+                            onImageCaptured(uri)
+                        }
+                    }
+
+                    override fun onError(exception: ImageCaptureException) {
+                        Log.e("CameraX", "Photo capture failed: ${exception.message}", exception)
+                    }
+                }
+            )
+        },
+        modifier = Modifier
+            .padding(16.dp)
+    ) {
+
+        Spacer(Modifier.width(8.dp))
+        Text("Сделать фото")
+    }*/
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -480,9 +599,8 @@ fun ContentMain(
     coroutineScope: CoroutineScope,
     hasPermission: Boolean,
     scaffoldState: BottomSheetScaffoldState,
-    permissionLauncher: ManagedActivityResultLauncher<Array<String>, Map<String, @JvmSuppressWildcards Boolean>>,
     selectedVisible: SnapshotStateList<Uri>,
-    selected: SnapshotStateList<Uri>,
+    images: SnapshotStateList<Uri>,
     mediaPickerLauncher: ManagedActivityResultLauncher<PickVisualMediaRequest, List<@JvmSuppressWildcards Uri>>
 
 
@@ -499,6 +617,7 @@ fun ContentMain(
             modifier = Modifier.fillMaxSize()
 
         )
+
         val brush = Brush.linearGradient(
             colors = listOf(
                 Color(0xFF8A7EE3),
@@ -707,6 +826,13 @@ fun SheetContent(
     stateLazyVerticalGrid: LazyGridState,
     innerPadding: PaddingValues
 ) {
+    var capturedUri by remember { mutableStateOf<Uri?>(null) }
+
+    LaunchedEffect(bottomSheetState) {
+        loadMedia(context, images)
+    }
+
+
     var openUri = remember { mutableStateListOf<Uri>() }
     val videoCount = selected.count { isVideo(context, it) }
     val photoCount = selected.size - videoCount
@@ -714,9 +840,7 @@ fun SheetContent(
     val isOnlyVideo = videoCount > 0 && photoCount == 0
     val isOnlyPhoto = photoCount > 0 && videoCount == 0
     val isMixed = videoCount > 0 && photoCount > 0
-    LaunchedEffect(bottomSheetState) {
-        loadMedia(context, images)
-    }
+
 
     Column {
         AnimatedVisibility(
@@ -764,10 +888,34 @@ fun SheetContent(
             contentPadding = PaddingValues(horizontal = 8.dp),
             modifier = Modifier
         ) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .width(150.dp)
+                        .height(120.dp)
+                        .clip(RoundedCornerShape(topStart = 10.dp))
+                        .background(Color.LightGray)
+                        .clickable { /* как-то обработать */ },
+                    contentAlignment = Alignment.Center,
+
+                    ) {
+
+                    CameraXCaptureScreen(
+                        onImageCaptured = { uri ->
+                            capturedUri = uri
+                        },
+                        modifier = Modifier,
+                        images
+                    )
+
+                    capturedUri?.let {
+                        Text("Фото сохранено: $it", modifier = Modifier.padding(8.dp))
+                    }
+                }
+            }
             itemsIndexed(images) { index, uri ->
                 val cornerShape = when (index) {
-                    0 -> RoundedCornerShape(topStart = 10.dp)
-                    2 -> RoundedCornerShape(topEnd = 10.dp)
+                    1 -> RoundedCornerShape(topEnd = 10.dp)
                     else -> RoundedCornerShape(0.dp)
                 }
 
