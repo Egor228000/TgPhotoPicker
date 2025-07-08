@@ -157,7 +157,7 @@ fun SheetContent(
                         .height(120.dp)
                         .clip(RoundedCornerShape(topStart = 10.dp))
                         .background(Color.LightGray)
-                        .clickable { /* как-то обработать */ },
+                        .clickable {},
                     contentAlignment = Alignment.Center,
 
                     ) {
@@ -174,7 +174,7 @@ fun SheetContent(
                             true,
                             false,
                             false,
-                            CameraSelector.DEFAULT_BACK_CAMERA
+                            CameraSelector.DEFAULT_FRONT_CAMERA
                         )
                     } else {
 

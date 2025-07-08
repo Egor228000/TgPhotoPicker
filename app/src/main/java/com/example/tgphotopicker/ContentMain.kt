@@ -462,7 +462,6 @@ fun ContentMain(
                     .clip(CircleShape)
                     .align(Alignment.Center),
                 images,
-                selectedVisible,
                 false,
                 isRecording,
                 false,
