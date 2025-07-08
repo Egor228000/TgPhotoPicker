@@ -49,8 +49,8 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -84,6 +84,7 @@ import com.skydoves.landscapist.ImageOptions
 import com.skydoves.landscapist.coil.CoilImage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.PI
@@ -121,7 +122,7 @@ fun ContentMain(
             progress.snapTo(0f)
             progress.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(durationMillis = 5000)
+                animationSpec = tween(durationMillis = 60000)
             )
             isRecording = false
         } else {
@@ -187,11 +188,17 @@ fun ContentMain(
                                     this.playWhenReady = true
                                 }
                         }
-                        val sliderProgress by derivedStateOf {
-                            val pos = exoPlayer.currentPosition.toFloat()
-                            val dur = (exoPlayer.duration.takeIf { it > 0 } ?: 1L).toFloat()
-                            pos / dur
+                        val currentProgress = remember { mutableStateOf(0f) }
+
+                        LaunchedEffect(exoPlayer) {
+                            while (true) {
+                                val pos = exoPlayer.currentPosition.toFloat()
+                                val dur = (exoPlayer.duration.takeIf { it > 0 } ?: 1L).toFloat()
+                                currentProgress.value = pos / dur
+                                delay(1L)
+                            }
                         }
+
 
 
                         Box(
@@ -221,11 +228,13 @@ fun ContentMain(
 
                             }
                             TouchControlledCircularProgressIndicator(
+                                modifier = Modifier,
+                                progress = currentProgress.value,
                                 onProgressChange = { newProgress ->
                                     val duration = exoPlayer.duration
                                     if (duration > 0) {
-                                        val newPosition = (newProgress * duration).toLong()
-                                        exoPlayer.seekTo(newPosition)
+                                        val seekPosition = (newProgress * duration).toLong()
+                                        exoPlayer.seekTo(seekPosition)
                                     }
                                 }
                             )
@@ -366,7 +375,8 @@ fun ContentMain(
                                         } catch (e: CancellationException) {
                                             false
                                         }
-                                        isRecording = true
+                                        isRecording = false
+
 
                                     }
                                 )
@@ -440,7 +450,9 @@ fun ContentMain(
                 },
                 onVideoCaptured = { uri ->
                     Log.d("CameraX", "Captured video URI: $uri")
-                    selectedVisible.add(uri)
+                    if (!selectedVisible.contains(uri)) {
+                        selectedVisible.add(uri)
+                    }
                     iconVideoCircle.value = false
                 },
                 modifier = Modifier
@@ -521,18 +533,22 @@ fun ContentMain(
 @Composable
 fun TouchControlledCircularProgressIndicator(
     modifier: Modifier = Modifier,
-    initialProgress: Float = 0.0f,
+    progress: Float,
     onProgressChange: (Float) -> Unit
 ) {
-    var progress by remember { mutableStateOf(initialProgress) }
 
+    var localProgress by remember { mutableStateOf(progress) }
+
+    LaunchedEffect(progress) {
+        localProgress = progress
+    }
     // Круговые параметры
     val radius = 300.dp
-    val strokeWidth = 7.dp
+    val strokeWidth = 5.dp
 
     val radiusPx = with(LocalDensity.current) { radius.toPx() }
 
-    val angleOffset = Math.toRadians(90.0).toFloat() // Прогресс "бежит" вперёд на 15°
+    val angleOffset = Math.toRadians(90.0).toFloat()
 
     Box(
         modifier = modifier
@@ -552,7 +568,7 @@ fun TouchControlledCircularProgressIndicator(
                                 val angle = atan2(dy, dx)
                                 val normalizedAngle = ((angle + angleOffset + 2 * PI) % (2 * PI)).toFloat()
                                 val newProgress = normalizedAngle / (2 * PI.toFloat())
-                                progress = newProgress
+                                localProgress = newProgress
                                 onProgressChange(newProgress)
                             }
                         }
@@ -573,7 +589,7 @@ fun TouchControlledCircularProgressIndicator(
                                 val angle = atan2(dy, dx)
                                 val normalizedAngle = ((angle + angleOffset + 2 * PI) % (2 * PI)).toFloat()
                                 val newProgress = normalizedAngle / (2 * PI.toFloat())
-                                progress = newProgress
+                                localProgress = newProgress
                                 onProgressChange(newProgress)
                             }
                         }
@@ -583,9 +599,13 @@ fun TouchControlledCircularProgressIndicator(
         contentAlignment = Alignment.Center
     ) {
         CircularProgressIndicator(
-            progress = { progress },
+            progress = { localProgress },
             strokeWidth = strokeWidth,
-            modifier = Modifier.fillMaxSize()
+            trackColor = Color.Gray,
+            color = Color.White,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp)
         )
     }
 }
