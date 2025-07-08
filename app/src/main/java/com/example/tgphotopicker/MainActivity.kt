@@ -2,7 +2,6 @@ package com.example.tgphotopicker
 
 import android.Manifest
 import android.content.ContentUris
-import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
@@ -22,7 +21,7 @@ import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.video.MediaStoreOutputOptions
+import androidx.camera.video.FileOutputOptions
 import androidx.camera.video.Quality
 import androidx.camera.video.QualitySelector
 import androidx.camera.video.Recorder
@@ -97,6 +96,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -235,6 +235,7 @@ fun Main() {
                         context,
                         images,
                         selected,
+                        selectedVisible,
                         bottomSheetState,
                         stateLazyVerticalGrid,
                         innerPadding,
@@ -297,23 +298,26 @@ fun CameraXCaptureScreen(
 
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
     val previewView = remember { PreviewView(context) }
+
     val imageCapture = remember { ImageCapture.Builder().build() }
+
     val recorder = remember {
         Recorder.Builder()
-            .setQualitySelector(QualitySelector.from(Quality.FHD))
+            .setQualitySelector(QualitySelector.from(Quality.HD))
             .build()
     }
-    val videoCapture = remember {
-        VideoCapture.withOutput(recorder)
-    }
-    var activeRecording by remember { mutableStateOf<Recording?>(null) }
+    val videoCapture = remember { VideoCapture.withOutput(recorder) }
 
-    LaunchedEffect(cameraProviderFuture) {
+    var activeRecording by remember { mutableStateOf<Recording?>(null) }
+    var isRecordingStarted by remember { mutableStateOf(isVideoRecording) }
+
+    // CameraX binding
+    LaunchedEffect(cameraProviderFuture, cameraSelector) {
         val cameraProvider = cameraProviderFuture.get()
         val preview = Preview.Builder().build().also {
             it.setSurfaceProvider(previewView.surfaceProvider)
         }
-        val cameraSelector = cameraSelector
+
         try {
             cameraProvider.unbindAll()
             cameraProvider.bindToLifecycle(
@@ -324,23 +328,25 @@ fun CameraXCaptureScreen(
                 videoCapture
             )
         } catch (e: Exception) {
-            Log.e("CameraX", "Camera binding failed", e)
+            Log.e("CameraX", "❌ Failed to bind camera use cases", e)
         }
     }
 
+    // Photo capture
     LaunchedEffect(isPhotoCapture) {
         if (isPhotoCapture && hasCameraPermission) {
             val photoFile = File.createTempFile("IMG_", ".jpg", context.cacheDir)
             val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
+
             imageCapture.takePicture(
                 outputOptions,
                 ContextCompat.getMainExecutor(context),
                 object : ImageCapture.OnImageSavedCallback {
                     override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                        val savedUri = output.savedUri ?: Uri.fromFile(photoFile)
-                        onImageCaptured(savedUri)
-                        images.add(savedUri)
-                        Log.d("CameraX", "📸 Photo captured: $savedUri")
+                        val uri = output.savedUri ?: Uri.fromFile(photoFile)
+                        images.add(uri)
+                        onImageCaptured(uri)
+                        Log.d("CameraX", "📸 Photo captured: $uri")
                     }
 
                     override fun onError(exception: ImageCaptureException) {
@@ -351,67 +357,65 @@ fun CameraXCaptureScreen(
         }
     }
 
+    // Video recording
     LaunchedEffect(isVideoRecording) {
-        if (isVideoRecording) {
+        if (isVideoRecording && activeRecording == null) {
 
-            val name = "VID_${System.currentTimeMillis()}.mp4"
-            val contentValues = ContentValues().apply {
-                put(MediaStore.Video.Media.DISPLAY_NAME, name)
-                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/CameraX")
-                }
-            }
+            val timestamp = System.currentTimeMillis()
+            val videoFile = File(context.cacheDir, "VID_$timestamp.mp4")
 
-            val outputOptions = MediaStoreOutputOptions.Builder(
-                context.contentResolver,
-                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-            ).setContentValues(contentValues).build()
+            val outputOptions = FileOutputOptions
+                .Builder(videoFile)
+                .build()
+            activeRecording = videoCapture.output
+                .prepareRecording(context, outputOptions)
+                .withAudioEnabled()
+                .start(ContextCompat.getMainExecutor(context)) { event ->
+                    when (event) {
+                        is VideoRecordEvent.Start -> {
+                            Log.d("CameraX", "▶️ Recording started")
+                            isRecordingStarted = true
+                        }
+                        is VideoRecordEvent.Finalize -> {
+                            isRecordingStarted = false
+                            activeRecording = null
 
-            try {
-                activeRecording = videoCapture.output
-                    .prepareRecording(context, outputOptions)
-                    .withAudioEnabled()
-                    .start(ContextCompat.getMainExecutor(context)) { recordEvent ->
-                        when (recordEvent) {
-                            is VideoRecordEvent.Start -> {
-                                Log.d("CameraX", "▶️ Recording started")
-                            }
-                            is VideoRecordEvent.Finalize -> {
-                                if (recordEvent.hasError()) {
-                                    Log.e("CameraX", "❌ Video error: ${recordEvent.error}", recordEvent.cause)
-                                } else {
-                                    recordEvent.outputResults.outputUri?.let { uri ->
-                                        onVideoCaptured(uri)
-                                        images.add(uri)
-                                        Log.d("CameraX", "✅ Video saved: $uri")
-                                    }
-                                }
+                            if (!event.hasError()) {
+                                val fileUri = Uri.fromFile(videoFile)
+                                onVideoCaptured(fileUri)
+                                Log.d("CameraX", "✅ Video saved to: $fileUri")
+                            } else {
+                                Log.e("CameraX", "❌ Video error: ${event.error}", event.cause)
                             }
                         }
                     }
-            } catch (e: Exception) {
-                Log.e("CameraX", "❌ Failed to start recording", e)
-            }
-        } else {
-            // Остановка записи
-            try {
+                }
+        } else if (!isVideoRecording && activeRecording != null) {
+            if (isRecordingStarted) {
+                delay(100)
                 activeRecording?.stop()
-            } catch (e: Exception) {
-                Log.e("CameraX", "⚠️ Failed to stop recording", e)
-            } finally {
-                activeRecording = null
+                Log.d("CameraX", "⏹️ Stopping video recording")
+            } else {
+                Log.w("CameraX", "⚠️ Tried to stop before recording started")
             }
+            activeRecording = null
         }
     }
 
+    // Cleanup
     DisposableEffect(Unit) {
         onDispose {
-            val cameraProvider = cameraProviderFuture.get()
-            cameraProvider.unbindAll()
-            activeRecording?.stop()
-            activeRecording = null
-            Log.d("CameraX", "Camera released")
+            try {
+                cameraProviderFuture.get().unbindAll()
+                if (isRecordingStarted) {
+                    activeRecording?.stop()
+                }
+                activeRecording = null
+                isRecordingStarted = false
+                Log.d("CameraX", "📴 Camera released")
+            } catch (e: Exception) {
+                Log.e("CameraX", "❌ Error during camera release", e)
+            }
         }
     }
 
@@ -439,6 +443,7 @@ fun CameraXCaptureScreen(
         )
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -618,7 +623,6 @@ fun PanelRow() {
 }
 
 
-
 fun calculateAspectRatio(context: Context, imageUri: Uri): Float? {
     return try {
         context.contentResolver.openInputStream(imageUri)?.use { inputStream ->
@@ -641,7 +645,6 @@ fun calculateAspectRatio(context: Context, imageUri: Uri): Float? {
         null
     }
 }
-
 
 
 @Composable
@@ -682,7 +685,6 @@ fun CircleCheckBox(
 
     }
 }
-
 
 
 fun isVideo(context: Context, uri: Uri): Boolean {
