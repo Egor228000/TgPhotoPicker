@@ -1,82 +1,59 @@
 package com.example.tgphotopicker
 
 import android.Manifest
-import android.R.attr.y
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
-import android.util.Size
-import android.view.ViewGroup
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.annotation.RequiresApi
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.video.MediaStoreOutputOptions
+import androidx.camera.video.Quality
+import androidx.camera.video.QualitySelector
+import androidx.camera.video.Recorder
+import androidx.camera.video.Recording
+import androidx.camera.video.VideoCapture
+import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyGridState
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.BottomSheetScaffold
-import androidx.compose.material3.BottomSheetScaffoldState
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -98,50 +75,30 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
-import com.skydoves.landscapist.ImageOptions
-import com.skydoves.landscapist.coil.CoilImage
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.FileNotFoundException
+import java.io.File
 
 class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -158,6 +115,8 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Main() {
+    var iconVideoCircle = remember { mutableStateOf(false) }
+
     val images = remember { mutableStateListOf<Uri>() }
     val selected = remember { mutableStateListOf<Uri>() }
     var selectedVisible = remember { mutableStateListOf<Uri>() }
@@ -278,7 +237,8 @@ fun Main() {
                         selected,
                         bottomSheetState,
                         stateLazyVerticalGrid,
-                        innerPadding
+                        innerPadding,
+                        hasPermission
                     )
                 }
             },
@@ -289,7 +249,11 @@ fun Main() {
             topBar = {
                 TopAppBar(
                     title = { Text("Photo Picker", color = Color.White) },
-                    colors = TopAppBarDefaults.topAppBarColors(Color(0xFF202F41))
+                    colors = TopAppBarDefaults.topAppBarColors(Color(0xFF202F41)),
+                    modifier = Modifier
+                        .blur(
+                            if (iconVideoCircle.value) 10.dp else 0.dp
+                        )
                 )
             }
         ) {
@@ -300,7 +264,8 @@ fun Main() {
                 scaffoldState,
                 selectedVisible,
                 images,
-                mediaPickerLauncher
+                mediaPickerLauncher,
+                iconVideoCircle
             )
         }
     }
@@ -309,110 +274,170 @@ fun Main() {
 @Composable
 fun CameraXCaptureScreen(
     onImageCaptured: (Uri) -> Unit,
+    onVideoCaptured: (Uri) -> Unit,
     modifier: Modifier = Modifier,
-    images: SnapshotStateList<Uri>
+    images: SnapshotStateList<Uri>,
+    iconVisible: Boolean,
+    isVideoRecording: Boolean,
+    isPhotoCapture: Boolean,
+    cameraSelector: CameraSelector
 ) {
-    val cameraPermission = Manifest.permission.CAMERA
     val context = LocalContext.current
-    val hasCameraPermission = ContextCompat.checkSelfPermission(
-        context,
-        cameraPermission
-    ) == PackageManager.PERMISSION_GRANTED
-
-    val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        // Обновить состояние или заново инициализировать камеру
-    }
-
-    LaunchedEffect(Unit) {
-        if (!hasCameraPermission) {
-            launcher.launch(cameraPermission)
-        }
-    }
     val lifecycleOwner = LocalLifecycleOwner.current
 
+    val cameraPermission = Manifest.permission.CAMERA
+    val audioPermission = Manifest.permission.RECORD_AUDIO
+
+    val hasCameraPermission = ContextCompat.checkSelfPermission(context, cameraPermission) == PackageManager.PERMISSION_GRANTED
+    val hasAudioPermission = ContextCompat.checkSelfPermission(context, audioPermission) == PackageManager.PERMISSION_GRANTED
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {}
+
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
-
-    val imageCapture = remember { ImageCapture.Builder().build() }
-
     val previewView = remember { PreviewView(context) }
-
-    AndroidView(
-        factory = { previewView },
-        modifier = modifier
-            .fillMaxWidth()
-    )
+    val imageCapture = remember { ImageCapture.Builder().build() }
+    val recorder = remember {
+        Recorder.Builder()
+            .setQualitySelector(QualitySelector.from(Quality.FHD))
+            .build()
+    }
+    val videoCapture = remember {
+        VideoCapture.withOutput(recorder)
+    }
+    var activeRecording by remember { mutableStateOf<Recording?>(null) }
 
     LaunchedEffect(cameraProviderFuture) {
         val cameraProvider = cameraProviderFuture.get()
         val preview = Preview.Builder().build().also {
             it.setSurfaceProvider(previewView.surfaceProvider)
         }
-
-        val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-
+        val cameraSelector = cameraSelector
         try {
             cameraProvider.unbindAll()
             cameraProvider.bindToLifecycle(
                 lifecycleOwner,
                 cameraSelector,
                 preview,
-                imageCapture
+                imageCapture,
+                videoCapture
             )
         } catch (e: Exception) {
             Log.e("CameraX", "Camera binding failed", e)
         }
     }
-    Icon(
-        painter = painterResource(R.drawable.baseline_camera_alt_24),
-        contentDescription = "Сделать фото",
-        tint = Color.White,
-        modifier = Modifier
-            .size(40.dp)
-    )
-    // Кнопка для съёмки
-    /*Button(
-        onClick = {
-            val name = "photo_${System.currentTimeMillis()}.jpg"
-            val contentValues = ContentValues().apply {
-                put(MediaStore.Images.Media.DISPLAY_NAME, name)
-                put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraX-Compose")
-                }
-            }
 
-            val outputOptions = ImageCapture.OutputFileOptions
-                .Builder(
-                    context.contentResolver,
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    contentValues
-                ).build()
-
+    LaunchedEffect(isPhotoCapture) {
+        if (isPhotoCapture && hasCameraPermission) {
+            val photoFile = File.createTempFile("IMG_", ".jpg", context.cacheDir)
+            val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
             imageCapture.takePicture(
                 outputOptions,
                 ContextCompat.getMainExecutor(context),
                 object : ImageCapture.OnImageSavedCallback {
-                    override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                        outputFileResults.savedUri?.let { uri ->
-                            onImageCaptured(uri)
-                        }
+                    override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                        val savedUri = output.savedUri ?: Uri.fromFile(photoFile)
+                        onImageCaptured(savedUri)
+                        images.add(savedUri)
+                        Log.d("CameraX", "📸 Photo captured: $savedUri")
                     }
 
                     override fun onError(exception: ImageCaptureException) {
-                        Log.e("CameraX", "Photo capture failed: ${exception.message}", exception)
+                        Log.e("CameraX", "❌ Photo capture failed: ${exception.message}", exception)
                     }
                 }
             )
-        },
-        modifier = Modifier
-            .padding(16.dp)
-    ) {
+        }
+    }
 
-        Spacer(Modifier.width(8.dp))
-        Text("Сделать фото")
-    }*/
+    LaunchedEffect(isVideoRecording) {
+        if (isVideoRecording) {
+
+            val name = "VID_${System.currentTimeMillis()}.mp4"
+            val contentValues = ContentValues().apply {
+                put(MediaStore.Video.Media.DISPLAY_NAME, name)
+                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/CameraX")
+                }
+            }
+
+            val outputOptions = MediaStoreOutputOptions.Builder(
+                context.contentResolver,
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            ).setContentValues(contentValues).build()
+
+            try {
+                activeRecording = videoCapture.output
+                    .prepareRecording(context, outputOptions)
+                    .withAudioEnabled()
+                    .start(ContextCompat.getMainExecutor(context)) { recordEvent ->
+                        when (recordEvent) {
+                            is VideoRecordEvent.Start -> {
+                                Log.d("CameraX", "▶️ Recording started")
+                            }
+                            is VideoRecordEvent.Finalize -> {
+                                if (recordEvent.hasError()) {
+                                    Log.e("CameraX", "❌ Video error: ${recordEvent.error}", recordEvent.cause)
+                                } else {
+                                    recordEvent.outputResults.outputUri?.let { uri ->
+                                        onVideoCaptured(uri)
+                                        images.add(uri)
+                                        Log.d("CameraX", "✅ Video saved: $uri")
+                                    }
+                                }
+                            }
+                        }
+                    }
+            } catch (e: Exception) {
+                Log.e("CameraX", "❌ Failed to start recording", e)
+            }
+        } else {
+            // Остановка записи
+            try {
+                activeRecording?.stop()
+            } catch (e: Exception) {
+                Log.e("CameraX", "⚠️ Failed to stop recording", e)
+            } finally {
+                activeRecording = null
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            val cameraProvider = cameraProviderFuture.get()
+            cameraProvider.unbindAll()
+            activeRecording?.stop()
+            activeRecording = null
+            Log.d("CameraX", "Camera released")
+        }
+    }
+
+    AndroidView(
+        factory = { previewView },
+        modifier = modifier
+    )
+
+    if (iconVisible) {
+        Icon(
+            painter = painterResource(
+                if (isVideoRecording) R.drawable.baseline_camera_alt_24
+                else R.drawable.outline_video_camera_front_off_24
+            ),
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier
+                .size(40.dp)
+                .padding(8.dp)
+                .clickable {
+                    if (!hasCameraPermission || !hasAudioPermission) {
+                        permissionLauncher.launch(arrayOf(cameraPermission, audioPermission))
+                    }
+                }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -592,206 +617,7 @@ fun PanelRow() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ContentMain(
-    context: Context,
-    coroutineScope: CoroutineScope,
-    hasPermission: Boolean,
-    scaffoldState: BottomSheetScaffoldState,
-    selectedVisible: SnapshotStateList<Uri>,
-    images: SnapshotStateList<Uri>,
-    mediaPickerLauncher: ManagedActivityResultLauncher<PickVisualMediaRequest, List<@JvmSuppressWildcards Uri>>
 
-
-) {
-    var textField by remember { mutableStateOf("") }
-
-    Box(
-        modifier = Modifier
-    ) {
-        Image(
-            painter = painterResource(R.drawable.d2bfd3ea45910c01255ae022181148c4),
-            null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-
-        )
-
-        val brush = Brush.linearGradient(
-            colors = listOf(
-                Color(0xFF8A7EE3),
-                Color(0xFFC953BD)
-            ),
-            start = Offset(2f, 2f),
-            end = Offset(2f, y + 200f)
-        )
-
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier
-                .padding(16.dp),
-            contentPadding = PaddingValues(bottom = 64.dp)
-
-        ) {
-            items(selectedVisible) { img ->
-
-                val aspectRatio by remember(img) {
-                    mutableFloatStateOf(calculateAspectRatio(context, img) ?: 1f)
-                }
-                if (isVideo(context, img)) {
-                    Column(
-                        horizontalAlignment = Alignment.End,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        VideoPlayer(
-                            uri = img,
-                            modifier = Modifier
-                                .fillMaxSize(0.7f)
-                                .aspectRatio(aspectRatio)
-                                .clip(RoundedCornerShape(10, 3, 3, 10))
-                                .background(brush)
-                                .padding(4.dp)
-                        )
-                    }
-                } else {
-
-                    Column(
-                        horizontalAlignment = Alignment.End,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Card(
-                            shape = RoundedCornerShape(10, 3, 3, 10),
-                            modifier = Modifier
-                                .fillMaxSize(0.7f)
-                                .aspectRatio(aspectRatio)
-                                .clip(RoundedCornerShape(10, 3, 3, 10))
-                                .background(brush)
-                                .padding(4.dp)
-                        ) {
-                            CoilImage(
-                                imageModel = { img },
-                                imageOptions = ImageOptions(
-                                    contentScale = ContentScale.Crop,
-                                    alignment = Alignment.Center
-                                ),
-                                modifier = Modifier
-
-
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    Column(
-        verticalArrangement = Arrangement.Bottom,
-        modifier = Modifier.fillMaxHeight()
-    ) {
-        TextField(
-            value = textField,
-            onValueChange = { textField = it },
-            modifier = Modifier
-
-                .height(60.dp)
-                .fillMaxWidth(1f),
-            maxLines = 1,
-            shape = RoundedCornerShape(0.dp),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color(0xFF202F41),
-                unfocusedContainerColor = Color(0xFF202F41),
-                unfocusedIndicatorColor = Color(0xFF202F41),
-                focusedIndicatorColor = Color(0xFF202F41),
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White
-
-            ),
-            textStyle = TextStyle(fontSize = 25.sp),
-            placeholder = { Text("Сообщение", color = Color(0xFF707F92), fontSize = 20.sp) },
-            leadingIcon = {
-                IconButton(
-                    onClick = {
-
-                    },
-                    modifier = Modifier
-                        .graphicsLayer(
-                            translationY = -35f
-                        )
-
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.outline_emoji_language_24),
-                        null,
-                        modifier = Modifier
-
-                            .size(30.dp),
-                        tint = Color(0xFF707F92)
-                    )
-                }
-
-            },
-            trailingIcon = {
-                IconButton(
-                    onClick = {
-
-                    },
-                    modifier = Modifier
-                        .graphicsLayer(
-                            translationY = -35f
-                        )
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.outline_mic_24),
-                        null,
-                        modifier = Modifier
-                            .size(30.dp),
-                        tint = Color(0xFF707F92)
-                    )
-                }
-            },
-            suffix = {
-                IconButton(
-                    onClick = {
-                        coroutineScope.launch {
-                            if (hasPermission) {
-                                when {
-                                    scaffoldState.bottomSheetState.isVisible ->
-                                        scaffoldState.bottomSheetState.hide()
-
-                                    scaffoldState.bottomSheetState.isVisible ->
-                                        scaffoldState.bottomSheetState.expand()
-
-                                    else ->
-                                        scaffoldState.bottomSheetState.show()
-                                }
-                            } else {
-
-                                mediaPickerLauncher.launch(
-                                    PickVisualMediaRequest(PickVisualMedia.ImageAndVideo)
-                                )
-                            }
-                        }
-                    },
-                    modifier = Modifier
-                        .graphicsLayer(
-                            translationY = -35f
-                        )
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.outline_attach_file_24),
-                        null,
-                        modifier = Modifier
-                            .size(30.dp)
-                            .graphicsLayer(rotationZ = -150f),
-                        tint = Color(0xFF707F92)
-                    )
-                }
-            }
-        )
-    }
-}
 
 fun calculateAspectRatio(context: Context, imageUri: Uri): Float? {
     return try {
@@ -816,268 +642,7 @@ fun calculateAspectRatio(context: Context, imageUri: Uri): Float? {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun SheetContent(
-    context: Context,
-    images: SnapshotStateList<Uri>,
-    selected: SnapshotStateList<Uri>,
-    bottomSheetState: SheetState,
-    stateLazyVerticalGrid: LazyGridState,
-    innerPadding: PaddingValues
-) {
-    var capturedUri by remember { mutableStateOf<Uri?>(null) }
 
-    LaunchedEffect(bottomSheetState) {
-        loadMedia(context, images)
-    }
-
-
-    var openUri = remember { mutableStateListOf<Uri>() }
-    val videoCount = selected.count { isVideo(context, it) }
-    val photoCount = selected.size - videoCount
-
-    val isOnlyVideo = videoCount > 0 && photoCount == 0
-    val isOnlyPhoto = photoCount > 0 && videoCount == 0
-    val isMixed = videoCount > 0 && photoCount > 0
-
-
-    Column {
-        AnimatedVisibility(
-            visible = selected.isNotEmpty(),
-            enter = slideInVertically(
-                initialOffsetY = { it },
-                animationSpec = tween(durationMillis = 300)
-            ),
-            exit = slideOutVertically(
-                targetOffsetY = { it },
-                animationSpec = tween(durationMillis = 300)
-            ),
-            modifier = Modifier.padding(horizontal = 8.dp)
-        ) {
-            val text = when {
-                isMixed -> "Выбрано ${selected.size} медиафайл${pluralEnding(selected.size)}"
-                isOnlyVideo -> "Выбрано ${selected.size} видео"
-                isOnlyPhoto -> {
-                    val verb = if (selected.size == 1) "Выбрана" else "Выбрано"
-                    val noun = when {
-                        selected.size % 10 == 1 && selected.size % 100 != 11 -> "фотография"
-                        selected.size % 10 in 2..4 && selected.size % 100 !in 12..14 -> "фотографии"
-                        else -> "фотографий"
-                    }
-                    "$verb ${selected.size} $noun"
-                }
-
-                else -> {
-                    ""
-                }
-            }
-            Text(
-                text = text,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-        }
-
-        LazyVerticalGrid(
-            state = stateLazyVerticalGrid,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            columns = GridCells.Fixed(3),
-            contentPadding = PaddingValues(horizontal = 8.dp),
-            modifier = Modifier
-        ) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .width(150.dp)
-                        .height(120.dp)
-                        .clip(RoundedCornerShape(topStart = 10.dp))
-                        .background(Color.LightGray)
-                        .clickable { /* как-то обработать */ },
-                    contentAlignment = Alignment.Center,
-
-                    ) {
-
-                    CameraXCaptureScreen(
-                        onImageCaptured = { uri ->
-                            capturedUri = uri
-                        },
-                        modifier = Modifier,
-                        images
-                    )
-
-                    capturedUri?.let {
-                        Text("Фото сохранено: $it", modifier = Modifier.padding(8.dp))
-                    }
-                }
-            }
-            itemsIndexed(images) { index, uri ->
-                val cornerShape = when (index) {
-                    1 -> RoundedCornerShape(topEnd = 10.dp)
-                    else -> RoundedCornerShape(0.dp)
-                }
-
-                val isSelected = uri in selected
-                val selectionIndex = if (isSelected) selected.indexOf(uri) + 1 else 0
-                val isVideo = isVideo(context, uri)
-
-                val scale by animateFloatAsState(
-                    targetValue = if (isSelected) 0.9f else 1f,
-                    animationSpec = spring(dampingRatio = 0.6f)
-                )
-
-                Box(
-                    modifier = Modifier
-                        .width(150.dp)
-                        .height(120.dp)
-                ) {
-                    if (isVideo) {
-                        VideoPreview(
-                            uri,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer {
-                                    scaleX = scale
-                                    scaleY = scale
-                                }
-                                .clickable { openUri.add(uri) }
-                        )
-                    } else {
-                        CoilImage(
-                            imageModel = { uri },
-                            imageOptions = ImageOptions(
-                                contentScale = ContentScale.Crop,
-                                alignment = Alignment.Center
-                            ),
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer {
-                                    scaleX = scale
-                                    scaleY = scale
-                                }
-                                .clickable { openUri.add(uri) }
-                                .clip(cornerShape)
-                        )
-                    }
-
-                    CircleCheckBox(
-                        checked = isSelected,
-                        onCheckedChange = { newValue ->
-                            if (newValue) selected.add(uri)
-                            else selected.remove(uri)
-                        },
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(4.dp),
-                        countFiles = selectionIndex
-                    )
-                }
-            }
-        }
-    }
-
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
-    val context = LocalContext.current
-    val density = LocalDensity.current.density
-    var constraints by remember { mutableStateOf(Constraints()) }
-
-    val maxOffsetX = remember(scale, constraints.maxWidth) {
-        if (scale <= 1f) 0f else (constraints.maxWidth * (scale - 1) / 2f)
-    }
-    val maxOffsetY = remember(scale, constraints.maxHeight) {
-        if (scale <= 1f) 0f else (constraints.maxHeight * (scale - 1) / 2f)
-    }
-
-    val state = rememberTransformableState { zoomChange, panChange, _ ->
-        scale = (scale * zoomChange).coerceIn(1f, 6f)
-        offset = Offset(
-            x = (offset.x + panChange.x * scale).coerceIn(-maxOffsetX, maxOffsetX),
-            y = (offset.y + panChange.y * scale).coerceIn(-maxOffsetY, maxOffsetY)
-        )
-    }
-
-    if (openUri.isNotEmpty()) {
-
-        Dialog(
-            onDismissRequest = { openUri.clear() },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            BackHandler {
-                openUri.clear()
-            }
-
-            Box(
-                modifier = Modifier
-                    .onSizeChanged {
-                        constraints = Constraints(
-                            maxWidth = (it.width / density).toInt(),
-                            maxHeight = (it.height / density).toInt()
-                        )
-                    }
-                    .fillMaxSize()
-
-            ) {
-                openUri.forEach { uri ->
-                    val isVideo = isVideo(context, uri)
-                    Box {
-                        if (isVideo) {
-                            VideoPlayer(
-                                uri,
-                                modifier = Modifier.fillMaxSize()
-
-                            )
-                        } else {
-                            CoilImage(
-                                imageModel = { uri },
-                                imageOptions = ImageOptions(
-                                    contentScale = ContentScale.Crop,
-                                    alignment = Alignment.Center
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .pointerInput(Unit) {
-                                        detectTapGestures(
-                                            onDoubleTap = {
-                                                if (scale > 1f) {
-                                                    scale = 1f
-                                                    offset = Offset.Zero
-                                                } else {
-                                                    scale = 2f
-                                                }
-                                            }
-                                        )
-                                    }
-                                    .graphicsLayer {
-                                        scaleX = scale
-                                        scaleY = scale
-                                        translationX = offset.x
-                                        translationY = offset.y
-                                    }
-                                    .transformable(state)
-                            )
-                        }
-                    }
-                }
-                IconButton(
-                    onClick = {
-                        openUri.clear()
-                    }
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.baseline_close_24),
-                        null,
-                        tint = Color.White,
-                        modifier = Modifier
-                            .size(30.dp)
-                    )
-                }
-            }
-        }
-    }
-}
 
 @Composable
 fun CircleCheckBox(
@@ -1118,122 +683,14 @@ fun CircleCheckBox(
     }
 }
 
-@Composable
-fun VideoPreview(
-    uri: Uri,
-    modifier: Modifier = Modifier,
-    placeholder: Painter? = null
-) {
-    val context = LocalContext.current
 
-    val mime = remember(uri) { context.contentResolver.getType(uri) }
-    val isVideo = mime?.startsWith("video") == true
-
-    val bitmap by produceState<Bitmap?>(initialValue = null, key1 = uri) {
-        if (!isVideo) {
-            value = null
-            return@produceState
-        }
-        value = withContext(Dispatchers.IO) {
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    context.contentResolver.loadThumbnail(uri, Size(480, 480), null)
-                } else {
-                    val id = ContentUris.parseId(uri)
-                    MediaStore.Video.Thumbnails.getThumbnail(
-                        context.contentResolver,
-                        id,
-                        MediaStore.Video.Thumbnails.MINI_KIND,
-                        null
-                    )
-                }
-            } catch (e: FileNotFoundException) {
-                Log.w("VideoPreview", "Thumbnail not found for $uri", e)
-                null
-            } catch (e: SecurityException) {
-                Log.e("VideoPreview", "No permission to read $uri", e)
-                null
-            } catch (e: Exception) {
-                Log.e("VideoPreview", "Error loading thumbnail for $uri", e)
-                null
-            }
-        }
-    }
-
-    Box(modifier = modifier) {
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap!!.asImageBitmap(),
-                contentDescription = "Video preview",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else if (placeholder != null) {
-            Image(
-                painter = placeholder,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-
-        if (bitmap != null || placeholder != null) {
-            Icon(
-                painter = painterResource(R.drawable.baseline_play_arrow_24),
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier
-                    .size(48.dp)
-                    .align(Alignment.Center)
-            )
-        }
-    }
-}
-
-
-@Composable
-fun VideoPlayer(
-    uri: Uri,
-    modifier: Modifier = Modifier,
-    playWhenReady: Boolean = false
-) {
-    val context = LocalContext.current
-    val exoPlayer = remember {
-        ExoPlayer.Builder(context)
-            .build()
-            .apply {
-                setMediaItem(MediaItem.fromUri(uri))
-                prepare()
-                this.playWhenReady = playWhenReady
-            }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose { exoPlayer.release() }
-    }
-
-    AndroidView(
-        factory = { ctx ->
-            PlayerView(ctx).apply {
-                player = exoPlayer
-                useController = true
-                layoutParams =
-                    ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-            }
-        },
-        modifier = modifier
-    )
-}
 
 fun isVideo(context: Context, uri: Uri): Boolean {
     val type = context.contentResolver.getType(uri)
     return type?.startsWith("video") == true
 }
 
-private fun loadMedia(context: Context, mediaList: MutableList<Uri>) {
+fun loadMedia(context: Context, mediaList: MutableList<Uri>) {
     val imageProjection =
         arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DATE_ADDED)
     val videoProjection = arrayOf(MediaStore.Video.Media._ID, MediaStore.Video.Media.DATE_ADDED)
