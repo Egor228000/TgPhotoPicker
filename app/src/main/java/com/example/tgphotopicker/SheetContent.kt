@@ -1,6 +1,7 @@
 package com.example.tgphotopicker
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.camera.core.CameraSelector
@@ -64,6 +65,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import coil.ImageLoader
+import coil.memory.MemoryCache
+import coil.memory.MemoryCache.Builder
+import coil.request.ImageRequest
 import com.skydoves.landscapist.ImageOptions
 import com.skydoves.landscapist.coil.CoilImage
 
@@ -174,7 +179,7 @@ fun SheetContent(
                             true,
                             false,
                             false,
-                            CameraSelector.DEFAULT_FRONT_CAMERA
+                            CameraSelector.DEFAULT_BACK_CAMERA
                         )
                     } else {
 
@@ -215,7 +220,7 @@ fun SheetContent(
                         )
                     } else {
                         CoilImage(
-                            imageModel = { uri },
+
                             imageOptions = ImageOptions(
                                 contentScale = ContentScale.Crop,
                                 alignment = Alignment.Center
@@ -227,8 +232,23 @@ fun SheetContent(
                                     scaleY = scale
                                 }
                                 .clickable { openUri.add(uri) }
-                                .clip(cornerShape)
+                                .clip(cornerShape),
+                            imageRequest = {
+                                ImageRequest.Builder(context)
+                                    .data(uri)
+                                    .crossfade(true)
+                                    .size(180)
+                                    .bitmapConfig(Bitmap.Config.RGB_565)
+                                    .build()
+                            },
+                            imageLoader = {
+                                ImageLoader.Builder(LocalContext.current)
+                                    .memoryCache { Builder(context).maxSizePercent(0.25).build() } // ограничить доступную память
+                                    .crossfade(true)
+                                    .build()
+                            },
                         )
+
                     }
 
                     CircleCheckBox(
