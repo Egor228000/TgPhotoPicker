@@ -233,8 +233,8 @@ fun Main() {
                 Box {
                     SheetContent(
                         context,
+                        images,
                         selected,
-                        selectedVisible,
                         bottomSheetState,
                         stateLazyVerticalGrid,
                         innerPadding,
@@ -426,7 +426,7 @@ fun CameraXCaptureScreen(
     if (iconVisible) {
         Icon(
             painter = painterResource(
-                if (isVideoRecording) R.drawable.baseline_camera_alt_24
+                if (isVideoRecording || hasAudioPermission) R.drawable.baseline_camera_alt_24
                 else R.drawable.outline_video_camera_front_off_24
             ),
             contentDescription = null,
@@ -686,7 +686,10 @@ fun CircleCheckBox(
 }
 
 
-
+fun isVideo(context: Context, uri: Uri): Boolean {
+    val type = context.contentResolver.getType(uri)
+    return type?.startsWith("video") == true
+}
 
 fun loadMedia(context: Context, mediaList: MutableList<Uri>) {
     val imageProjection =

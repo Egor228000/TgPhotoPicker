@@ -314,7 +314,6 @@ fun ContentMain(
                 unfocusedTextColor = Color.White
 
             ),
-            enabled = false,
             textStyle = TextStyle(fontSize = 25.sp),
             placeholder = { Text("Сообщение", color = Color(0xFF707F92), fontSize = 20.sp) },
             leadingIcon = {
