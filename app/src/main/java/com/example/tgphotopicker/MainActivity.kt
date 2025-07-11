@@ -233,7 +233,6 @@ fun Main() {
                 Box {
                     SheetContent(
                         context,
-                        images,
                         selected,
                         selectedVisible,
                         bottomSheetState,
@@ -687,10 +686,7 @@ fun CircleCheckBox(
 }
 
 
-fun isVideo(context: Context, uri: Uri): Boolean {
-    val type = context.contentResolver.getType(uri)
-    return type?.startsWith("video") == true
-}
+
 
 fun loadMedia(context: Context, mediaList: MutableList<Uri>) {
     val imageProjection =

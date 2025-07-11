@@ -1,6 +1,7 @@
 package com.example.tgphotopicker
 
 import android.content.ContentUris
+import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
@@ -143,4 +144,9 @@ fun VideoPlayer(
         },
         modifier = modifier
     )
+}
+
+fun isVideo(context: Context, uri: Uri): Boolean {
+    val type = context.contentResolver.getType(uri)
+    return type?.startsWith("video") == true
 }
