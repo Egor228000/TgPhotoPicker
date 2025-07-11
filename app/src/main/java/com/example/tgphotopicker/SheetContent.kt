@@ -84,8 +84,6 @@ fun SheetContent(
     hasPermission: Boolean
 ) {
     var capturedUri by remember { mutableStateOf<Uri?>(null) }
-
-
     val expanded by remember {
         derivedStateOf {
             bottomSheetState.currentValue == SheetValue.PartiallyExpanded
@@ -179,7 +177,8 @@ fun SheetContent(
                             true,
                             false,
                             false,
-                            CameraSelector.DEFAULT_BACK_CAMERA
+                            CameraSelector.DEFAULT_BACK_CAMERA,
+                            context
                         )
                     } else {
 
@@ -220,7 +219,6 @@ fun SheetContent(
                         )
                     } else {
                         CoilImage(
-
                             imageOptions = ImageOptions(
                                 contentScale = ContentScale.Crop,
                                 alignment = Alignment.Center
@@ -243,7 +241,9 @@ fun SheetContent(
                             },
                             imageLoader = {
                                 ImageLoader.Builder(LocalContext.current)
-                                    .memoryCache { Builder(context).maxSizePercent(0.25).build() } // ограничить доступную память
+                                    .memoryCache {
+                                        Builder(context).maxSizePercent(0.25).build()
+                                    } // ограничить доступную память
                                     .crossfade(true)
                                     .build()
                             },
