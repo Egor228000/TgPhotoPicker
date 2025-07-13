@@ -31,7 +31,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
@@ -53,7 +52,8 @@ fun CameraXCaptureScreen(
     isVideoRecording: Boolean,
     isPhotoCapture: Boolean,
     cameraSelector: CameraSelector,
-    context: Context
+    context: Context,
+    onClick: () -> Unit
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -216,6 +216,8 @@ fun CameraXCaptureScreen(
                 .clickable {
                     if (!hasCameraPermission || !hasAudioPermission) {
                         permissionLauncher.launch(arrayOf(cameraPermission, audioPermission))
+                    } else {
+                        onClick()
                     }
                 }
         )
