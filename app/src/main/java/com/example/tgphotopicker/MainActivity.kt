@@ -1,34 +1,20 @@
 package com.example.tgphotopicker
 
-import android.Manifest
 import android.content.ContentUris
 import android.content.Context
-import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
-import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.Preview
-import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.video.FileOutputOptions
-import androidx.camera.video.Quality
-import androidx.camera.video.QualitySelector
-import androidx.camera.video.Recorder
-import androidx.camera.video.Recording
-import androidx.camera.video.VideoCapture
-import androidx.camera.video.VideoRecordEvent
-import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
@@ -70,8 +56,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -93,12 +78,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.io.File
 
 class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -106,86 +86,59 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
-            Main()
+            val context = LocalContext.current
+            var hasPermission = remember {
+                mutableStateOf(false)
+            }
+            val images = remember { mutableStateListOf<Uri>() }
+
+            val mediaPickerLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.PickMultipleVisualMedia()
+            ) { uris ->
+                if (!uris.isNullOrEmpty()) {
+                    images.clear()
+                    images.addAll(uris)
+                }
+            }
+            Main(
+                context,
+                mediaPickerLauncher,
+                hasPermission,
+                images
+            )
         }
     }
 }
 
+
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Main() {
+fun Main(
+    context: Context,
+    mediaPickerLauncher: ManagedActivityResultLauncher<PickVisualMediaRequest, List<@JvmSuppressWildcards Uri>>,
+    hasPermission: MutableState<Boolean>,
+    images: SnapshotStateList<Uri>
+) {
     var iconVideoCircle = remember { mutableStateOf(false) }
-
-    val images = remember { mutableStateListOf<Uri>() }
     val selected = remember { mutableStateListOf<Uri>() }
     var selectedVisible = remember { mutableStateListOf<Uri>() }
-
     var stateLazyVerticalGrid = rememberLazyGridState()
 
-    val context = LocalContext.current
-    var hasPermission by remember {
-        mutableStateOf(false)
-    }
+    PermissionLaunch(
+        context,
+        images,
+        hasPermission
 
-    val mediaPickerLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickMultipleVisualMedia()
-    ) { uris ->
-        if (!uris.isNullOrEmpty()) {
-            images.clear()
-            images.addAll(uris)
-        }
-    }
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        hasPermission = permissions.values.any { it }
-    }
-
-    LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val imagesGranted = ContextCompat.checkSelfPermission(
-                context, Manifest.permission.READ_MEDIA_IMAGES
-            ) == PackageManager.PERMISSION_GRANTED
-
-            val videosGranted = ContextCompat.checkSelfPermission(
-                context, Manifest.permission.READ_MEDIA_VIDEO
-            ) == PackageManager.PERMISSION_GRANTED
-
-            hasPermission = imagesGranted || videosGranted
-
-            if (!imagesGranted || !videosGranted) {
-                permissionLauncher.launch(
-                    arrayOf(
-                        Manifest.permission.READ_MEDIA_IMAGES,
-                        Manifest.permission.READ_MEDIA_VIDEO
-                    )
-                )
-            }
-        } else {
-            hasPermission = ContextCompat.checkSelfPermission(
-                context, Manifest.permission.READ_EXTERNAL_STORAGE
-            ) == PackageManager.PERMISSION_GRANTED
-
-            if (!hasPermission) {
-                permissionLauncher.launch(
-                    arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-                )
-
-            }
-        }
-    }
-
-
+    )
     val bottomSheetState = rememberStandardBottomSheetState(
         initialValue = SheetValue.Hidden,
         skipHiddenState = false
     )
+
     val scaffoldState = rememberBottomSheetScaffoldState(
         bottomSheetState = bottomSheetState
     )
-    val coroutineScope = rememberCoroutineScope()
-
     val expanded by remember {
         derivedStateOf {
             scaffoldState.bottomSheetState.currentValue == SheetValue.PartiallyExpanded
@@ -238,7 +191,7 @@ fun Main() {
                         bottomSheetState,
                         stateLazyVerticalGrid,
                         innerPadding,
-                        hasPermission
+                        hasPermission.value
                     )
                 }
             },
@@ -259,8 +212,7 @@ fun Main() {
         ) {
             ContentMain(
                 context,
-                coroutineScope,
-                hasPermission,
+                hasPermission.value,
                 scaffoldState,
                 selectedVisible,
                 images,
@@ -271,177 +223,7 @@ fun Main() {
     }
 }
 
-@Composable
-fun CameraXCaptureScreen(
-    onImageCaptured: (Uri) -> Unit,
-    onVideoCaptured: (Uri) -> Unit,
-    modifier: Modifier = Modifier,
-    images: SnapshotStateList<Uri>,
-    iconVisible: Boolean,
-    isVideoRecording: Boolean,
-    isPhotoCapture: Boolean,
-    cameraSelector: CameraSelector
-) {
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
 
-    val cameraPermission = Manifest.permission.CAMERA
-    val audioPermission = Manifest.permission.RECORD_AUDIO
-
-    val hasCameraPermission = ContextCompat.checkSelfPermission(context, cameraPermission) == PackageManager.PERMISSION_GRANTED
-    val hasAudioPermission = ContextCompat.checkSelfPermission(context, audioPermission) == PackageManager.PERMISSION_GRANTED
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) {}
-
-    val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
-    val previewView = remember { PreviewView(context) }
-
-    val imageCapture = remember { ImageCapture.Builder().build() }
-
-    val recorder = remember {
-        Recorder.Builder()
-            .setQualitySelector(QualitySelector.from(Quality.HD))
-            .build()
-    }
-    val videoCapture = remember { VideoCapture.withOutput(recorder) }
-
-    var activeRecording by remember { mutableStateOf<Recording?>(null) }
-    var isRecordingStarted by remember { mutableStateOf(isVideoRecording) }
-
-    // CameraX binding
-    LaunchedEffect(cameraProviderFuture, cameraSelector) {
-        val cameraProvider = cameraProviderFuture.get()
-        val preview = Preview.Builder().build().also {
-            it.setSurfaceProvider(previewView.surfaceProvider)
-        }
-
-        try {
-            cameraProvider.unbindAll()
-            cameraProvider.bindToLifecycle(
-                lifecycleOwner,
-                cameraSelector,
-                preview,
-                imageCapture,
-                videoCapture
-            )
-        } catch (e: Exception) {
-            Log.e("CameraX", "❌ Failed to bind camera use cases", e)
-        }
-    }
-
-    // Photo capture
-    LaunchedEffect(isPhotoCapture) {
-        if (isPhotoCapture && hasCameraPermission) {
-            val photoFile = File.createTempFile("IMG_", ".jpg", context.cacheDir)
-            val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
-
-            imageCapture.takePicture(
-                outputOptions,
-                ContextCompat.getMainExecutor(context),
-                object : ImageCapture.OnImageSavedCallback {
-                    override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                        val uri = output.savedUri ?: Uri.fromFile(photoFile)
-                        images.add(uri)
-                        onImageCaptured(uri)
-                        Log.d("CameraX", "📸 Photo captured: $uri")
-                    }
-
-                    override fun onError(exception: ImageCaptureException) {
-                        Log.e("CameraX", "❌ Photo capture failed: ${exception.message}", exception)
-                    }
-                }
-            )
-        }
-    }
-
-    // Video recording
-    LaunchedEffect(isVideoRecording) {
-        if (isVideoRecording && activeRecording == null) {
-
-            val timestamp = System.currentTimeMillis()
-            val videoFile = File(context.cacheDir, "VID_$timestamp.mp4")
-
-            val outputOptions = FileOutputOptions
-                .Builder(videoFile)
-                .build()
-            activeRecording = videoCapture.output
-                .prepareRecording(context, outputOptions)
-                .withAudioEnabled()
-                .start(ContextCompat.getMainExecutor(context)) { event ->
-                    when (event) {
-                        is VideoRecordEvent.Start -> {
-                            Log.d("CameraX", "▶️ Recording started")
-                            isRecordingStarted = true
-                        }
-                        is VideoRecordEvent.Finalize -> {
-                            isRecordingStarted = false
-                            activeRecording = null
-
-                            if (!event.hasError()) {
-                                val fileUri = Uri.fromFile(videoFile)
-                                onVideoCaptured(fileUri)
-                                Log.d("CameraX", "✅ Video saved to: $fileUri")
-                            } else {
-                                Log.e("CameraX", "❌ Video error: ${event.error}", event.cause)
-                            }
-                        }
-                    }
-                }
-        } else if (!isVideoRecording && activeRecording != null) {
-            if (isRecordingStarted) {
-                delay(100)
-                activeRecording?.stop()
-                Log.d("CameraX", "⏹️ Stopping video recording")
-            } else {
-                Log.w("CameraX", "⚠️ Tried to stop before recording started")
-            }
-            activeRecording = null
-        }
-    }
-
-    // Cleanup
-    DisposableEffect(Unit) {
-        onDispose {
-            try {
-                cameraProviderFuture.get().unbindAll()
-                if (isRecordingStarted) {
-                    activeRecording?.stop()
-                }
-                activeRecording = null
-                isRecordingStarted = false
-                Log.d("CameraX", "📴 Camera released")
-            } catch (e: Exception) {
-                Log.e("CameraX", "❌ Error during camera release", e)
-            }
-        }
-    }
-
-    AndroidView(
-        factory = { previewView },
-        modifier = modifier
-    )
-
-    if (iconVisible) {
-        Icon(
-            painter = painterResource(
-                if (isVideoRecording) R.drawable.baseline_camera_alt_24
-                else R.drawable.outline_video_camera_front_off_24
-            ),
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier
-                .size(40.dp)
-                .padding(8.dp)
-                .clickable {
-                    if (!hasCameraPermission || !hasAudioPermission) {
-                        permissionLauncher.launch(arrayOf(cameraPermission, audioPermission))
-                    }
-                }
-        )
-    }
-}
 
 
 @OptIn(ExperimentalMaterial3Api::class)

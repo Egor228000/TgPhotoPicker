@@ -96,7 +96,6 @@ import kotlin.math.sqrt
 @Composable
 fun ContentMain(
     context: Context,
-    coroutineScope: CoroutineScope,
     hasPermission: Boolean,
     scaffoldState: BottomSheetScaffoldState,
     selectedVisible: SnapshotStateList<Uri>,
@@ -172,117 +171,117 @@ fun ContentMain(
                 val aspectRatio by remember(img) {
                     mutableFloatStateOf(calculateAspectRatio(context, img) ?: 1f)
                 }
-                if (img.toString().endsWith(".mp4")) {
+
                     Column(
                         horizontalAlignment = Alignment.End,
                         modifier = Modifier
                             .fillMaxWidth()
                     ) {
-                        val context = LocalContext.current
-                        val exoPlayer = remember {
-                            ExoPlayer.Builder(context)
-                                .build()
-                                .apply {
-                                    setMediaItem(MediaItem.fromUri(img))
-                                    prepare()
-                                    this.playWhenReady = true
-                                }
-                        }
-                        val currentProgress = remember { mutableStateOf(0f) }
-
-                        LaunchedEffect(exoPlayer) {
-                            while (true) {
-                                val pos = exoPlayer.currentPosition.toFloat()
-                                val dur = (exoPlayer.duration.takeIf { it > 0 } ?: 1L).toFloat()
-                                currentProgress.value = pos / dur
-                                delay(1L)
+                        if (img.toString().endsWith(".mp4")) {
+                            val exoPlayer = remember {
+                                ExoPlayer.Builder(context)
+                                    .build()
+                                    .apply {
+                                        setMediaItem(MediaItem.fromUri(img))
+                                        prepare()
+                                        this.playWhenReady = true
+                                    }
                             }
-                        }
+                            val currentProgress = remember { mutableStateOf(0f) }
 
-
-
-                        Box(
-                            modifier = Modifier
-                                .size(300.dp)
-                                .clip(CircleShape)
-                        ) {
-                            Column {
-
-
-                                DisposableEffect(Unit) {
-                                    onDispose { exoPlayer.release() }
+                            LaunchedEffect(exoPlayer) {
+                                while (true) {
+                                    val pos = exoPlayer.currentPosition.toFloat()
+                                    val dur = (exoPlayer.duration.takeIf { it > 0 } ?: 1L).toFloat()
+                                    currentProgress.value = pos / dur
+                                    delay(1L)
                                 }
+                            }
 
-                                AndroidView(
-                                    factory = { ctx ->
-                                        PlayerView(ctx).apply {
-                                            player = exoPlayer
-                                            useController = false
-                                            setShutterBackgroundColor(Color.Transparent.toArgb())
+
+
+                            Box(
+                                modifier = Modifier
+                                    .size(300.dp)
+                                    .clip(CircleShape)
+                            ) {
+                                Column {
+
+
+                                    DisposableEffect(Unit) {
+                                        onDispose { exoPlayer.release() }
+                                    }
+
+                                    AndroidView(
+                                        factory = { ctx ->
+                                            PlayerView(ctx).apply {
+                                                player = exoPlayer
+                                                useController = false
+                                                setShutterBackgroundColor(Color.Transparent.toArgb())
+                                            }
+                                        },
+                                        modifier = Modifier
+                                            .size(600.dp)
+                                            .aspectRatio(0.1f),
+                                    )
+
+                                }
+                                TouchControlledCircularProgressIndicator(
+                                    modifier = Modifier,
+                                    progress = currentProgress.value,
+                                    onProgressChange = { newProgress ->
+                                        val duration = exoPlayer.duration
+                                        if (duration > 0) {
+                                            val seekPosition = (newProgress * duration).toLong()
+                                            exoPlayer.seekTo(seekPosition)
                                         }
-                                    },
-                                    modifier = Modifier
-                                        .size(600.dp)
-                                        .aspectRatio(0.1f),
+                                    }
                                 )
 
+
                             }
-                            TouchControlledCircularProgressIndicator(
-                                modifier = Modifier,
-                                progress = currentProgress.value,
-                                onProgressChange = { newProgress ->
-                                    val duration = exoPlayer.duration
-                                    if (duration > 0) {
-                                        val seekPosition = (newProgress * duration).toLong()
-                                        exoPlayer.seekTo(seekPosition)
-                                    }
-                                }
-                            )
 
 
-
-
-                        }
-
-                       /* VideoPlayer(
-                            uri = img,
-                            modifier = Modifier
-                                .fillMaxSize(0.7f)
-                                .aspectRatio(aspectRatio)
-                                .clip(RoundedCornerShape(10, 3, 3, 10))
-                                .background(brush)
-                                .padding(4.dp),
-                            playWhenReady = true
-                        )*/
-                    }
-                } else {
-
-                    Column(
-                        horizontalAlignment = Alignment.End,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Card(
-                            shape = RoundedCornerShape(10, 3, 3, 10),
-                            modifier = Modifier
-                                .fillMaxSize(0.7f)
-                                .aspectRatio(aspectRatio)
-                                .clip(RoundedCornerShape(10, 3, 3, 10))
-                                .background(brush)
-                                .padding(4.dp)
-                        ) {
-                            CoilImage(
-                                imageModel = { img },
-                                imageOptions = ImageOptions(
-                                    contentScale = ContentScale.Crop,
-                                    alignment = Alignment.Center
-                                ),
+                        } else if (isVideo(context, img)) {
+                            VideoPlayer(
+                                uri = img,
                                 modifier = Modifier
-
-
+                                    .fillMaxSize(0.7f)
+                                    .aspectRatio(aspectRatio)
+                                    .clip(RoundedCornerShape(10, 3, 3, 10))
+                                    .background(brush)
+                                    .padding(4.dp),
+                                playWhenReady = true
                             )
+                        } else {
+
+                            Column(
+                                horizontalAlignment = Alignment.End,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Card(
+                                    shape = RoundedCornerShape(10, 3, 3, 10),
+                                    modifier = Modifier
+                                        .fillMaxSize(0.7f)
+                                        .aspectRatio(aspectRatio)
+                                        .clip(RoundedCornerShape(10, 3, 3, 10))
+                                        .background(brush)
+                                        .padding(4.dp)
+                                ) {
+                                    CoilImage(
+                                        imageModel = { img },
+                                        imageOptions = ImageOptions(
+                                            contentScale = ContentScale.Crop,
+                                            alignment = Alignment.Center
+                                        ),
+                                        modifier = Modifier
+
+
+                                    )
+                                }
+                            }
                         }
                     }
-                }
             }
         }
 
@@ -314,7 +313,6 @@ fun ContentMain(
                 unfocusedTextColor = Color.White
 
             ),
-            enabled = false,
             textStyle = TextStyle(fontSize = 25.sp),
             placeholder = { Text("Сообщение", color = Color(0xFF707F92), fontSize = 20.sp) },
             leadingIcon = {
