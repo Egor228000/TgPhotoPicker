@@ -594,7 +594,7 @@ fun TouchControlledCircularProgressIndicator(
                 }
             },
         contentAlignment = Alignment.Center
-    ) {
+    ) {//
         CircularProgressIndicator(
             progress = { localProgress },
             strokeWidth = strokeWidth,
