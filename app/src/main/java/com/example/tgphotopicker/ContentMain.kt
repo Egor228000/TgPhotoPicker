@@ -51,14 +51,12 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -71,7 +69,6 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -88,8 +85,6 @@ import androidx.media3.ui.PlayerView
 import com.example.tgphotopicker.view.MainViewModel
 import com.skydoves.landscapist.ImageOptions
 import com.skydoves.landscapist.coil.CoilImage
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
@@ -102,31 +97,27 @@ import kotlin.math.sqrt
 @Composable
 fun ContentMain(
     context: Context,
-    hasPermission: Boolean,
     scaffoldState: BottomSheetScaffoldState,
     mainViewModel: MainViewModel,
     mediaPickerLauncher: ManagedActivityResultLauncher<PickVisualMediaRequest, List<@JvmSuppressWildcards Uri>>,
-    iconVideoCircle: MutableState<Boolean>
 
 
 ) {
+    val recordingVideoCircle by mainViewModel.recordingVideoCircle.collectAsStateWithLifecycle()
+    val hasPermission by mainViewModel.hasPermission.collectAsStateWithLifecycle()
     val listMediaChat by mainViewModel.listMediaChat.collectAsStateWithLifecycle()
 
     var textField by remember { mutableStateOf("") }
-
     var iconToogle by remember { mutableStateOf(false) }
-
     val coroutineScope = rememberCoroutineScope()
-
     val progress = remember { Animatable(0f) }
     var isRecording by remember { mutableStateOf(false) }
     val cameraSelectorDefalt by remember { mutableStateOf(CameraSelector.DEFAULT_FRONT_CAMERA) }
-
     var isPlaying by remember { mutableStateOf(false) }
 
     suspend fun startRecordAnimation() {
 
-        if (iconVideoCircle.value) {
+        if (recordingVideoCircle) {
             progress.snapTo(0f)
             progress.animateTo(
                 targetValue = 1f,
@@ -149,7 +140,7 @@ fun ContentMain(
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .blur(
-                    if (iconVideoCircle.value) 10.dp else 0.dp
+                    if (recordingVideoCircle) 10.dp else 0.dp
                 )
 
                 .fillMaxSize()
@@ -169,7 +160,7 @@ fun ContentMain(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier
                 .blur(
-                    if (iconVideoCircle.value) 10.dp else 0.dp
+                    if (recordingVideoCircle) 10.dp else 0.dp
                 )
                 .padding(16.dp),
             contentPadding = PaddingValues(bottom = 64.dp)
@@ -178,7 +169,7 @@ fun ContentMain(
             items(listMediaChat) { img ->
 
                 val aspectRatio by remember(img) {
-                    mutableFloatStateOf(calculateAspectRatio(context, img) ?: 1f)
+                    mutableFloatStateOf(mainViewModel.calculateAspectRatio(context, img) ?: 1f)
                 }
 
                     Column(
@@ -333,7 +324,7 @@ fun ContentMain(
         verticalArrangement = Arrangement.Bottom,
         modifier = Modifier
             .blur(
-                if (iconVideoCircle.value) 10.dp else 0.dp
+                if (recordingVideoCircle) 10.dp else 0.dp
             )
             .fillMaxHeight()
     ) {
@@ -404,7 +395,7 @@ fun ContentMain(
                                         iconToogle = !iconToogle
                                     },
                                     onPress = {
-                                        iconVideoCircle.value = true
+                                        mainViewModel.addRecordingVideoCircle(true)
                                         isRecording = true
 
                                         coroutineScope.launch {
@@ -469,7 +460,7 @@ fun ContentMain(
             }
         )
     }
-    if (iconVideoCircle.value) {
+    if (recordingVideoCircle) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -494,7 +485,7 @@ fun ContentMain(
                     if (!listMediaChat.contains(uri)) {
                         mainViewModel.addMediaChatFirst(uri)
                     }
-                    iconVideoCircle.value = false
+                    mainViewModel.addRecordingVideoCircle(false)
                 },
                 modifier = Modifier
                     .size(340.dp)

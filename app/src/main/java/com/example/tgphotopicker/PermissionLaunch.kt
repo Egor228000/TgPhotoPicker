@@ -3,28 +3,26 @@ package com.example.tgphotopicker
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.tgphotopicker.view.MainViewModel
 
 @Composable
 fun PermissionLaunch(
     context: Context,
     mainViewModel: MainViewModel,
-    hasPermission: MutableState<Boolean>
 ) {
-
+    val hasPermission by mainViewModel.hasPermission.collectAsStateWithLifecycle()
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        hasPermission.value = permissions.values.any { it }
+        mainViewModel.addHasPermission(permissions.values.any { it })
     }
 
     LaunchedEffect(Unit) {
@@ -37,7 +35,7 @@ fun PermissionLaunch(
                 context, Manifest.permission.READ_MEDIA_VIDEO
             ) == PackageManager.PERMISSION_GRANTED
 
-            hasPermission.value = imagesGranted || videosGranted
+            mainViewModel.addHasPermission(imagesGranted || videosGranted)
 
             if (!imagesGranted || !videosGranted) {
                 permissionLauncher.launch(
@@ -48,11 +46,12 @@ fun PermissionLaunch(
                 )
             }
         } else {
-            hasPermission.value = ContextCompat.checkSelfPermission(
+            mainViewModel.addHasPermission(ContextCompat.checkSelfPermission(
                 context, Manifest.permission.READ_EXTERNAL_STORAGE
-            ) == PackageManager.PERMISSION_GRANTED
+            ) == PackageManager.PERMISSION_GRANTED)
 
-            if (!hasPermission.value) {
+
+            if (!hasPermission) {
                 permissionLauncher.launch(
                     arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
                 )
@@ -60,5 +59,4 @@ fun PermissionLaunch(
             }
         }
     }
-
 }

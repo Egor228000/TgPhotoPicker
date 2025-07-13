@@ -2,7 +2,6 @@ package com.example.tgphotopicker
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.camera.core.CameraSelector
 import androidx.compose.animation.AnimatedVisibility
@@ -42,11 +41,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,7 +64,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.ImageLoader
-import coil.memory.MemoryCache
 import coil.memory.MemoryCache.Builder
 import coil.request.ImageRequest
 import com.example.tgphotopicker.view.MainViewModel
@@ -82,12 +78,12 @@ fun SheetContent(
     bottomSheetState: SheetState,
     stateLazyVerticalGrid: LazyGridState,
     innerPadding: PaddingValues,
-    hasPermission: Boolean
 ) {
     val listMediaSheet by mainViewModel.listMediaSheet.collectAsStateWithLifecycle()
     val listMediaSheetSelected by mainViewModel.listMediaSheetSelected.collectAsStateWithLifecycle()
+    val hasPermission by mainViewModel.hasPermission.collectAsStateWithLifecycle()
+    val watchMedia by mainViewModel.watchMedia.collectAsStateWithLifecycle()
 
-    var capturedUri by remember { mutableStateOf<Uri?>(null) }
     val expanded by remember {
         derivedStateOf {
             bottomSheetState.currentValue == SheetValue.PartiallyExpanded
@@ -102,7 +98,6 @@ fun SheetContent(
     }
 
 
-    var openUri = remember { mutableStateListOf<Uri>() }
     val videoCount = listMediaSheetSelected.count { mainViewModel.isVideo(context, it) }
     val photoCount = listMediaSheetSelected.size - videoCount
 
@@ -125,7 +120,12 @@ fun SheetContent(
             modifier = Modifier.padding(horizontal = 8.dp)
         ) {
             val text = when {
-                isMixed -> "Выбрано ${listMediaSheetSelected.size} медиафайл${mainViewModel.pluralEnding(listMediaSheetSelected.size)}"
+                isMixed -> "Выбрано ${listMediaSheetSelected.size} медиафайл${
+                    mainViewModel.pluralEnding(
+                        listMediaSheetSelected.size
+                    )
+                }"
+
                 isOnlyVideo -> "Выбрано ${listMediaSheetSelected.size} видео"
                 isOnlyPhoto -> {
                     val verb = if (listMediaSheetSelected.size == 1) "Выбрана" else "Выбрано"
@@ -171,7 +171,6 @@ fun SheetContent(
                     if (expanded) {
                         CameraXCaptureScreen(
                             onImageCaptured = { uri ->
-                                capturedUri = uri
                             },
                             onVideoCaptured = {
 
@@ -219,7 +218,10 @@ fun SheetContent(
                                     scaleX = scale
                                     scaleY = scale
                                 }
-                                .clickable { openUri.add(uri) }
+                                .clickable {
+                                    mainViewModel.addWatchMedia(uri)
+                                },
+                            context = context
                         )
                     } else {
                         CoilImage(
@@ -233,7 +235,9 @@ fun SheetContent(
                                     scaleX = scale
                                     scaleY = scale
                                 }
-                                .clickable { openUri.add(uri) }
+                                .clickable {
+                                    mainViewModel.addWatchMedia(uri)
+                                }
                                 .clip(cornerShape),
                             imageRequest = {
                                 ImageRequest.Builder(context)
@@ -292,14 +296,17 @@ fun SheetContent(
         )
     }
 
-    if (openUri.isNotEmpty()) {
+    watchMedia?.let {
+
 
         Dialog(
-            onDismissRequest = { openUri.clear() },
+            onDismissRequest = {
+                mainViewModel.clearWatchMedia()
+            },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             BackHandler {
-                openUri.clear()
+                mainViewModel.clearWatchMedia()
             }
 
             Box(
@@ -313,7 +320,7 @@ fun SheetContent(
                     .fillMaxSize()
 
             ) {
-                openUri.forEach { uri ->
+                watchMedia?.let { uri ->
                     val isVideo = mainViewModel.isVideo(context, uri)
                     Box {
                         if (isVideo) {
@@ -356,7 +363,7 @@ fun SheetContent(
                 }
                 IconButton(
                     onClick = {
-                        openUri.clear()
+                        mainViewModel.clearWatchMedia()
                     }
                 ) {
                     Icon(

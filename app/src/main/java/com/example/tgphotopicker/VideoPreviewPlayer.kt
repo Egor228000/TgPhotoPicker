@@ -1,6 +1,7 @@
 package com.example.tgphotopicker
 
 import android.content.ContentUris
+import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
@@ -42,9 +43,9 @@ import java.io.FileNotFoundException
 fun VideoPreview(
     uri: Uri,
     modifier: Modifier = Modifier,
-    placeholder: Painter? = null
+    placeholder: Painter? = null,
+    context: Context
 ) {
-    val context = LocalContext.current
 
     val mime = remember(uri) { context.contentResolver.getType(uri) }
     val isVideo = mime?.startsWith("video") == true

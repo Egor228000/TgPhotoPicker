@@ -1,12 +1,9 @@
 package com.example.tgphotopicker
 
-import android.content.ContentUris
 import android.content.Context
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.MediaStore
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -57,15 +54,12 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -91,10 +85,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             val context = LocalContext.current
-            var hasPermission = remember {
-                mutableStateOf(false)
-            }
-
             val mediaPickerLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.PickMultipleVisualMedia()
             ) { uris ->
@@ -106,7 +96,6 @@ class MainActivity : ComponentActivity() {
             Main(
                 context,
                 mediaPickerLauncher,
-                hasPermission,
                 mainViewModel
             )
         }
@@ -120,20 +109,16 @@ class MainActivity : ComponentActivity() {
 fun Main(
     context: Context,
     mediaPickerLauncher: ManagedActivityResultLauncher<PickVisualMediaRequest, List<@JvmSuppressWildcards Uri>>,
-    hasPermission: MutableState<Boolean>,
     mainViewModel: MainViewModel
 ) {
 
     val listMediaSheetSelected by mainViewModel.listMediaSheetSelected.collectAsStateWithLifecycle()
-
-    var iconVideoCircle = remember { mutableStateOf(false) }
+    val recordingVideoCircle by mainViewModel.recordingVideoCircle.collectAsStateWithLifecycle()
     var stateLazyVerticalGrid = rememberLazyGridState()
 
     PermissionLaunch(
         context,
         mainViewModel,
-        hasPermission
-
     )
     val bottomSheetState = rememberStandardBottomSheetState(
         initialValue = SheetValue.Hidden,
@@ -194,7 +179,6 @@ fun Main(
                         bottomSheetState,
                         stateLazyVerticalGrid,
                         innerPadding,
-                        hasPermission.value
                     )
                 }
             },
@@ -208,18 +192,16 @@ fun Main(
                     colors = TopAppBarDefaults.topAppBarColors(Color(0xFF202F41)),
                     modifier = Modifier
                         .blur(
-                            if (iconVideoCircle.value) 10.dp else 0.dp
+                            if (recordingVideoCircle) 10.dp else 0.dp
                         )
                 )
             }
         ) {
             ContentMain(
                 context,
-                hasPermission.value,
                 scaffoldState,
                 mainViewModel,
                 mediaPickerLauncher,
-                iconVideoCircle
             )
         }
     }
@@ -408,28 +390,7 @@ fun PanelRow() {
 }
 
 
-fun calculateAspectRatio(context: Context, imageUri: Uri): Float? {
-    return try {
-        context.contentResolver.openInputStream(imageUri)?.use { inputStream ->
-            val options = BitmapFactory.Options().apply {
-                inJustDecodeBounds = true
-            }
-            BitmapFactory.decodeStream(inputStream, null, options)
 
-            val width = options.outWidth
-            val height = options.outHeight
-
-            if (width > 0 && height > 0) {
-                width.toFloat() / height.toFloat()
-            } else {
-                null
-            }
-        }
-    } catch (e: Exception) {
-        e.printStackTrace()
-        null
-    }
-}
 
 
 @Composable
