@@ -104,7 +104,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
+class CameraActivity : ComponentActivity() {
+    val mainViewModel: MainViewModel by viewModels()
+    override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(R.style.Theme_MyApp_FullScreen)
+        super.onCreate(savedInstanceState)
+        setContent {
+            val context = LocalContext.current
+            OpenCamera(
+                mainViewModel,
+                context
+            )
+        }
+    }
+}
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @OptIn(ExperimentalMaterial3Api::class)
