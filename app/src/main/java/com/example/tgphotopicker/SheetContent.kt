@@ -65,10 +65,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.ImageLoader
 import coil.memory.MemoryCache
 import coil.memory.MemoryCache.Builder
 import coil.request.ImageRequest
+import com.example.tgphotopicker.view.MainViewModel
 import com.skydoves.landscapist.ImageOptions
 import com.skydoves.landscapist.coil.CoilImage
 
@@ -76,13 +78,15 @@ import com.skydoves.landscapist.coil.CoilImage
 @Composable
 fun SheetContent(
     context: Context,
-    images: SnapshotStateList<Uri>,
-    selected: SnapshotStateList<Uri>,
+    mainViewModel: MainViewModel,
     bottomSheetState: SheetState,
     stateLazyVerticalGrid: LazyGridState,
     innerPadding: PaddingValues,
     hasPermission: Boolean
 ) {
+    val listMediaSheet by mainViewModel.listMediaSheet.collectAsStateWithLifecycle()
+    val listMediaSheetSelected by mainViewModel.listMediaSheetSelected.collectAsStateWithLifecycle()
+
     var capturedUri by remember { mutableStateOf<Uri?>(null) }
     val expanded by remember {
         derivedStateOf {
@@ -94,13 +98,13 @@ fun SheetContent(
         }
     }
     LaunchedEffect(hasPermission, bottomSheetState) {
-        loadMedia(context, images)
+        mainViewModel.loadMedia(context)
     }
 
 
     var openUri = remember { mutableStateListOf<Uri>() }
-    val videoCount = selected.count { isVideo(context, it) }
-    val photoCount = selected.size - videoCount
+    val videoCount = listMediaSheetSelected.count { mainViewModel.isVideo(context, it) }
+    val photoCount = listMediaSheetSelected.size - videoCount
 
     val isOnlyVideo = videoCount > 0 && photoCount == 0
     val isOnlyPhoto = photoCount > 0 && videoCount == 0
@@ -109,7 +113,7 @@ fun SheetContent(
 
     Column {
         AnimatedVisibility(
-            visible = selected.isNotEmpty(),
+            visible = listMediaSheetSelected.isNotEmpty(),
             enter = slideInVertically(
                 initialOffsetY = { it },
                 animationSpec = tween(durationMillis = 300)
@@ -121,16 +125,16 @@ fun SheetContent(
             modifier = Modifier.padding(horizontal = 8.dp)
         ) {
             val text = when {
-                isMixed -> "Выбрано ${selected.size} медиафайл${pluralEnding(selected.size)}"
-                isOnlyVideo -> "Выбрано ${selected.size} видео"
+                isMixed -> "Выбрано ${listMediaSheetSelected.size} медиафайл${mainViewModel.pluralEnding(listMediaSheetSelected.size)}"
+                isOnlyVideo -> "Выбрано ${listMediaSheetSelected.size} видео"
                 isOnlyPhoto -> {
-                    val verb = if (selected.size == 1) "Выбрана" else "Выбрано"
+                    val verb = if (listMediaSheetSelected.size == 1) "Выбрана" else "Выбрано"
                     val noun = when {
-                        selected.size % 10 == 1 && selected.size % 100 != 11 -> "фотография"
-                        selected.size % 10 in 2..4 && selected.size % 100 !in 12..14 -> "фотографии"
+                        listMediaSheetSelected.size % 10 == 1 && listMediaSheetSelected.size % 100 != 11 -> "фотография"
+                        listMediaSheetSelected.size % 10 in 2..4 && listMediaSheetSelected.size % 100 !in 12..14 -> "фотографии"
                         else -> "фотографий"
                     }
-                    "$verb ${selected.size} $noun"
+                    "$verb ${listMediaSheetSelected.size} $noun"
                 }
 
                 else -> {
@@ -173,7 +177,7 @@ fun SheetContent(
 
                             },
                             modifier = Modifier,
-                            images,
+                            mainViewModel,
                             true,
                             false,
                             false,
@@ -186,15 +190,15 @@ fun SheetContent(
 
                 }
             }
-            itemsIndexed(images) { index, uri ->
+            itemsIndexed(listMediaSheet) { index, uri ->
                 val cornerShape = when (index) {
                     1 -> RoundedCornerShape(topEnd = 10.dp)
                     else -> RoundedCornerShape(0.dp)
                 }
 
-                val isSelected = uri in selected
-                val selectionIndex = if (isSelected) selected.indexOf(uri) + 1 else 0
-                val isVideo = isVideo(context, uri)
+                val isSelected = uri in listMediaSheetSelected
+                val selectionIndex = if (isSelected) listMediaSheetSelected.indexOf(uri) + 1 else 0
+                val isVideo = mainViewModel.isVideo(context, uri)
 
                 val scale by animateFloatAsState(
                     targetValue = if (isSelected) 0.9f else 1f,
@@ -254,8 +258,8 @@ fun SheetContent(
                     CircleCheckBox(
                         checked = isSelected,
                         onCheckedChange = { newValue ->
-                            if (newValue) selected.add(uri)
-                            else selected.remove(uri)
+                            if (newValue) mainViewModel.addMediaSheetSelected(uri)
+                            else mainViewModel.removeMediaSheetSelected(uri)
                         },
                         modifier = Modifier
                             .align(Alignment.TopEnd)
@@ -310,7 +314,7 @@ fun SheetContent(
 
             ) {
                 openUri.forEach { uri ->
-                    val isVideo = isVideo(context, uri)
+                    val isVideo = mainViewModel.isVideo(context, uri)
                     Box {
                         if (isVideo) {
                             VideoPlayer(

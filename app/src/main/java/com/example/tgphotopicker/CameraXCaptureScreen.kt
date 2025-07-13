@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.example.tgphotopicker.view.MainViewModel
 import kotlinx.coroutines.delay
 import java.io.File
 
@@ -47,7 +48,7 @@ fun CameraXCaptureScreen(
     onImageCaptured: (Uri) -> Unit,
     onVideoCaptured: (Uri) -> Unit,
     modifier: Modifier = Modifier,
-    images: SnapshotStateList<Uri>,
+    mainViewModel: MainViewModel,
     iconVisible: Boolean,
     isVideoRecording: Boolean,
     isPhotoCapture: Boolean,
@@ -120,7 +121,7 @@ fun CameraXCaptureScreen(
                 object : ImageCapture.OnImageSavedCallback {
                     override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                         val uri = output.savedUri ?: Uri.fromFile(photoFile)
-                        images.add(uri)
+                        mainViewModel.addMediaSheet(uri)
                         onImageCaptured(uri)
                         Log.d("CameraX", "📸 Photo captured: $uri")
                     }

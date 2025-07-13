@@ -15,6 +15,9 @@ class MainViewModel() : ViewModel() {
     fun addMediaSheet(uri: Uri) {
         _listMediaSheet.value += uri
     }
+    fun addMediaSheetFirst(uri: List<Uri>) {
+        _listMediaSheet.value += uri
+    }
     fun clearMediaSheet() {
         _listMediaSheet.value = emptyList()
     }

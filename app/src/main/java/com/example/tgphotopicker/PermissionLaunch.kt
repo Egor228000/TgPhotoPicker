@@ -12,11 +12,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.core.content.ContextCompat
+import com.example.tgphotopicker.view.MainViewModel
 
 @Composable
 fun PermissionLaunch(
     context: Context,
-    images: SnapshotStateList<Uri>,
+    mainViewModel: MainViewModel,
     hasPermission: MutableState<Boolean>
 ) {
 

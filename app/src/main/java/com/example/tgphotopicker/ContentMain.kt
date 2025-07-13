@@ -79,11 +79,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import com.example.tgphotopicker.view.MainViewModel
 import com.skydoves.landscapist.ImageOptions
 import com.skydoves.landscapist.coil.CoilImage
 import kotlinx.coroutines.CoroutineScope
@@ -102,13 +104,14 @@ fun ContentMain(
     context: Context,
     hasPermission: Boolean,
     scaffoldState: BottomSheetScaffoldState,
-    selectedVisible: SnapshotStateList<Uri>,
-    images: SnapshotStateList<Uri>,
+    mainViewModel: MainViewModel,
     mediaPickerLauncher: ManagedActivityResultLauncher<PickVisualMediaRequest, List<@JvmSuppressWildcards Uri>>,
     iconVideoCircle: MutableState<Boolean>
 
 
 ) {
+    val listMediaChat by mainViewModel.listMediaChat.collectAsStateWithLifecycle()
+
     var textField by remember { mutableStateOf("") }
 
     var iconToogle by remember { mutableStateOf(false) }
@@ -172,7 +175,7 @@ fun ContentMain(
             contentPadding = PaddingValues(bottom = 64.dp)
 
         ) {
-            items(selectedVisible) { img ->
+            items(listMediaChat) { img ->
 
                 val aspectRatio by remember(img) {
                     mutableFloatStateOf(calculateAspectRatio(context, img) ?: 1f)
@@ -281,7 +284,7 @@ fun ContentMain(
                             }
 
 
-                        } else if (isVideo(context, img)) {
+                        } else if (mainViewModel.isVideo(context, img)) {
                             VideoPlayer(
                                 uri = img,
                                 modifier = Modifier
@@ -488,8 +491,8 @@ fun ContentMain(
                 },
                 onVideoCaptured = { uri ->
                     Log.d("CameraX", "Captured video URI: $uri")
-                    if (!selectedVisible.contains(uri)) {
-                        selectedVisible.add(uri)
+                    if (!listMediaChat.contains(uri)) {
+                        mainViewModel.addMediaChatFirst(uri)
                     }
                     iconVideoCircle.value = false
                 },
@@ -499,7 +502,7 @@ fun ContentMain(
 
                     .clip(CircleShape)
                     .align(Alignment.Center),
-                images,
+                mainViewModel,
                 false,
                 isRecording,
                 false,

@@ -14,6 +14,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -78,9 +79,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.tgphotopicker.view.MainViewModel
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    val mainViewModel: MainViewModel by viewModels()
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -90,21 +94,20 @@ class MainActivity : ComponentActivity() {
             var hasPermission = remember {
                 mutableStateOf(false)
             }
-            val images = remember { mutableStateListOf<Uri>() }
 
             val mediaPickerLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.PickMultipleVisualMedia()
             ) { uris ->
                 if (!uris.isNullOrEmpty()) {
-                    images.clear()
-                    images.addAll(uris)
+                    mainViewModel.clearMediaSheet()
+                    mainViewModel.addMediaSheetFirst(uris)
                 }
             }
             Main(
                 context,
                 mediaPickerLauncher,
                 hasPermission,
-                images
+                mainViewModel
             )
         }
     }
@@ -118,16 +121,17 @@ fun Main(
     context: Context,
     mediaPickerLauncher: ManagedActivityResultLauncher<PickVisualMediaRequest, List<@JvmSuppressWildcards Uri>>,
     hasPermission: MutableState<Boolean>,
-    images: SnapshotStateList<Uri>
+    mainViewModel: MainViewModel
 ) {
+
+    val listMediaSheetSelected by mainViewModel.listMediaSheetSelected.collectAsStateWithLifecycle()
+
     var iconVideoCircle = remember { mutableStateOf(false) }
-    val selected = remember { mutableStateListOf<Uri>() }
-    var selectedVisible = remember { mutableStateListOf<Uri>() }
     var stateLazyVerticalGrid = rememberLazyGridState()
 
     PermissionLaunch(
         context,
-        images,
+        mainViewModel,
         hasPermission
 
     )
@@ -142,7 +146,7 @@ fun Main(
     val expanded by remember {
         derivedStateOf {
             scaffoldState.bottomSheetState.currentValue == SheetValue.PartiallyExpanded
-                    || selected.isNotEmpty()
+                    || listMediaSheetSelected.isNotEmpty()
 
         }
     }
@@ -150,7 +154,7 @@ fun Main(
     Scaffold(
         bottomBar = {
             AnimatedVisibility(
-                visible = expanded && selected.isNotEmpty(),
+                visible = expanded && listMediaSheetSelected.isNotEmpty(),
                 enter = slideInVertically(
                     initialOffsetY = { it },
                     animationSpec = tween(300)
@@ -160,11 +164,11 @@ fun Main(
                     animationSpec = tween(300)
                 )
             ) {
-                PanelSend(selected, selectedVisible, bottomSheetState)
+                PanelSend(mainViewModel,bottomSheetState)
             }
 
             AnimatedVisibility(
-                visible = expanded && selected.isEmpty(),
+                visible = expanded && listMediaSheetSelected.isEmpty(),
                 enter = slideInVertically(
                     initialOffsetY = { it },
                     animationSpec = tween(300)
@@ -186,8 +190,7 @@ fun Main(
                 Box {
                     SheetContent(
                         context,
-                        images,
-                        selected,
+                        mainViewModel,
                         bottomSheetState,
                         stateLazyVerticalGrid,
                         innerPadding,
@@ -214,8 +217,7 @@ fun Main(
                 context,
                 hasPermission.value,
                 scaffoldState,
-                selectedVisible,
-                images,
+                mainViewModel,
                 mediaPickerLauncher,
                 iconVideoCircle
             )
@@ -229,10 +231,12 @@ fun Main(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PanelSend(
-    selected: SnapshotStateList<Uri>,
-    selectedVisible: SnapshotStateList<Uri>,
+    mainViewModel: MainViewModel,
     bottomSheetState: SheetState
 ) {
+    val listMediaSheetSelected by mainViewModel.listMediaSheetSelected.collectAsStateWithLifecycle()
+
+
     var textField by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
@@ -289,8 +293,8 @@ fun PanelSend(
             onClick = {
                 scope.launch {
                     bottomSheetState.hide()
-                    selectedVisible.addAll(selected)
-                    selected.clear()
+                        mainViewModel.addMediaChat(listMediaSheetSelected)
+                    mainViewModel.clearMediaSheetSelected()
                 }
             },
             modifier = Modifier
@@ -320,7 +324,7 @@ fun PanelSend(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = selected.size.toString(),
+                text = listMediaSheetSelected.size.toString(),
                 color = Color.White,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
@@ -467,68 +471,5 @@ fun CircleCheckBox(
     }
 }
 
-
-fun isVideo(context: Context, uri: Uri): Boolean {
-    val type = context.contentResolver.getType(uri)
-    return type?.startsWith("video") == true
-}
-
-fun loadMedia(context: Context, mediaList: MutableList<Uri>) {
-    val imageProjection =
-        arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DATE_ADDED)
-    val videoProjection = arrayOf(MediaStore.Video.Media._ID, MediaStore.Video.Media.DATE_ADDED)
-
-    val imageUriList = mutableListOf<Pair<Uri, Long>>()
-    val videoUriList = mutableListOf<Pair<Uri, Long>>()
-
-    context.contentResolver.query(
-        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-        imageProjection,
-        null,
-        null,
-        null
-    )?.use { cursor ->
-        val idCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
-        val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED)
-        while (cursor.moveToNext()) {
-            val id = cursor.getLong(idCol)
-            val date = cursor.getLong(dateCol)
-            val contentUri =
-                ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
-            imageUriList.add(contentUri to date)
-        }
-    }
-
-    context.contentResolver.query(
-        MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-        videoProjection,
-        null,
-        null,
-        null
-    )?.use { cursor ->
-        val idCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
-        val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
-        while (cursor.moveToNext()) {
-            val id = cursor.getLong(idCol)
-            val date = cursor.getLong(dateCol)
-            val contentUri =
-                ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
-            videoUriList.add(contentUri to date)
-        }
-    }
-
-    mediaList.clear()
-    (imageUriList + videoUriList)
-        .sortedByDescending { it.second }
-        .mapTo(mediaList) { it.first }
-}
-
-fun pluralEnding(count: Int, one: String = "", few: String = "а", many: String = "ов"): String {
-    return when {
-        count % 10 == 1 && count % 100 != 11 -> one
-        count % 10 in 2..4 && count % 100 !in 12..14 -> few
-        else -> many
-    }
-}
 
 
