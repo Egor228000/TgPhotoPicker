@@ -235,7 +235,6 @@ fun Main() {
                         context,
                         images,
                         selected,
-                        selectedVisible,
                         bottomSheetState,
                         stateLazyVerticalGrid,
                         innerPadding,
