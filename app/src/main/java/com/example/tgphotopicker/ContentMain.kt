@@ -17,6 +17,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -69,6 +70,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -76,7 +78,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -114,6 +118,8 @@ fun ContentMain(
     val progress = remember { Animatable(0f) }
     var isRecording by remember { mutableStateOf(false) }
     val cameraSelectorDefalt by remember { mutableStateOf(CameraSelector.DEFAULT_FRONT_CAMERA) }
+
+    var isPlaying by remember { mutableStateOf(false) }
 
     suspend fun startRecordAnimation() {
 
@@ -184,7 +190,7 @@ fun ContentMain(
                                     .apply {
                                         setMediaItem(MediaItem.fromUri(img))
                                         prepare()
-                                        this.playWhenReady = true
+                                        this.playWhenReady = isPlaying
                                     }
                             }
                             val currentProgress = remember { mutableStateOf(0f) }
@@ -202,14 +208,44 @@ fun ContentMain(
 
                             Box(
                                 modifier = Modifier
+                                    .clickable(
+                                        onClick = {
+                                            isPlaying = !isPlaying
+                                        }
+                                    )
                                     .size(300.dp)
                                     .clip(CircleShape)
+
                             ) {
-                                Column {
+                                Column(
+                                    modifier = Modifier
+                                    .clickable {
+                                    isPlaying = !isPlaying
+                                }
+                                    .zIndex(1f)
+                                ) {
 
 
-                                    DisposableEffect(Unit) {
-                                        onDispose { exoPlayer.release() }
+                                    LaunchedEffect(isPlaying) {
+                                        if (isPlaying) exoPlayer.play() else exoPlayer.pause()
+                                    }
+
+                                    // listen for end of playback
+                                    DisposableEffect(exoPlayer) {
+                                        val listener = object : Player.Listener {
+                                            override fun onPlaybackStateChanged(state: Int) {
+                                                if (state == Player.STATE_ENDED) {
+                                                    // rewind and update UI
+                                                    exoPlayer.seekTo(0)
+                                                    isPlaying = false
+                                                }
+                                            }
+                                        }
+                                        exoPlayer.addListener(listener)
+                                        onDispose {
+                                            exoPlayer.removeListener(listener)
+                                            exoPlayer.release()
+                                        }
                                     }
 
                                     AndroidView(
@@ -227,7 +263,10 @@ fun ContentMain(
 
                                 }
                                 TouchControlledCircularProgressIndicator(
-                                    modifier = Modifier,
+                                    modifier = Modifier
+                                        .zIndex(2f)
+
+                                        .matchParentSize(),
                                     progress = currentProgress.value,
                                     onProgressChange = { newProgress ->
                                         val duration = exoPlayer.duration
@@ -313,6 +352,7 @@ fun ContentMain(
                 unfocusedTextColor = Color.White
 
             ),
+            enabled = false,
             textStyle = TextStyle(fontSize = 25.sp),
             placeholder = { Text("Сообщение", color = Color(0xFF707F92), fontSize = 20.sp) },
             leadingIcon = {
@@ -534,76 +574,65 @@ fun TouchControlledCircularProgressIndicator(
     progress: Float,
     onProgressChange: (Float) -> Unit
 ) {
-
     var localProgress by remember { mutableStateOf(progress) }
+    LaunchedEffect(progress) { localProgress = progress }
 
-    LaunchedEffect(progress) {
-        localProgress = progress
-    }
-    // Круговые параметры
-    val radius = 300.dp
-    val strokeWidth = 5.dp
-
-    val radiusPx = with(LocalDensity.current) { radius.toPx() }
-
+    val strokeWidth = 7.dp
+    val paddingDp   = 16.dp
+    val radiusDp    = 300.dp
+    val diameterDp  = radiusDp * 2 + paddingDp * 2
     val angleOffset = Math.toRadians(90.0).toFloat()
 
+    val strokePx = with(LocalDensity.current) { strokeWidth.toPx() }
+    val padPx    = with(LocalDensity.current) { paddingDp.toPx() }
+
+    var boxSizePx by remember { mutableStateOf(0f) }
+    val effectiveRadiusPx = (boxSizePx / 2f) - padPx
+    val innerRadiusPx     = effectiveRadiusPx - strokePx
+    val outerRadiusPx     = effectiveRadiusPx
+
     Box(
-        modifier = modifier
-            .size(radius * 2)
+        modifier
+            .size(diameterDp)
+            .onSizeChanged { boxSizePx = it.width.toFloat() }
             .pointerInput(Unit) {
-                coroutineScope {
-                    launch {
-                        detectTapGestures { tapOffset ->
-                            val size = this@pointerInput.size
-                            val center = Offset(size.width / 2f, size.height / 2f)
+                detectDragGestures { change, _ ->
+                    val center = Offset((size.width/2).toFloat(), (size.height/2).toFloat())
+                    val dx = change.position.x - center.x
+                    val dy = change.position.y - center.y
+                    val dist = sqrt(dx*dx + dy*dy)
 
-                            val dx = tapOffset.x - center.x
-                            val dy = tapOffset.y - center.y
-                            val distance = sqrt(dx * dx + dy * dy)
-
-                            if (distance <= radiusPx) {
-                                val angle = atan2(dy, dx)
-                                val normalizedAngle = ((angle + angleOffset + 2 * PI) % (2 * PI)).toFloat()
-                                val newProgress = normalizedAngle / (2 * PI.toFloat())
-                                localProgress = newProgress
-                                onProgressChange(newProgress)
-                            }
-                        }
-                    }
-
-                    launch {
-                        detectDragGestures { change, _ ->
-                            val size = this@pointerInput.size
-                            val center = Offset(size.width / 2f, size.height / 2f)
-
-                            val touch = change.position
-                            val dx = touch.x - center.x
-                            val dy = touch.y - center.y
-
-                            val distanceFromCenter = sqrt(dx * dx + dy * dy)
-
-                            if (distanceFromCenter <= radiusPx) {
-                                val angle = atan2(dy, dx)
-                                val normalizedAngle = ((angle + angleOffset + 2 * PI) % (2 * PI)).toFloat()
-                                val newProgress = normalizedAngle / (2 * PI.toFloat())
-                                localProgress = newProgress
-                                onProgressChange(newProgress)
-                            }
-                        }
+                    if (dist in innerRadiusPx..outerRadiusPx) {
+                        val angle      = atan2(dy, dx)
+                        val normalized = ((angle + angleOffset + 2*PI) % (2*PI)).toFloat()
+                        localProgress = normalized / (2*PI.toFloat())
+                        onProgressChange(localProgress)
                     }
                 }
-            },
-        contentAlignment = Alignment.Center
+            }
+            .pointerInput(Unit) {
+                detectTapGestures { tap ->
+                    val center = Offset((size.width/2).toFloat(), (size.height/2).toFloat())
+                    val dx = tap.x - center.x
+                    val dy = tap.y - center.y
+                    val dist = sqrt(dx*dx + dy*dy)
+
+                    if (dist in innerRadiusPx..outerRadiusPx) {
+                        val angle      = atan2(dy, dx)
+                        val normalized = ((angle + angleOffset + 2*PI) % (2*PI)).toFloat()
+                        localProgress = normalized / (2*PI.toFloat())
+                        onProgressChange(localProgress)
+                    }
+                }
+            }
+            .padding(paddingDp)
     ) {
         CircularProgressIndicator(
-            progress = { localProgress },
+            progress    = { localProgress },
             strokeWidth = strokeWidth,
-            trackColor = Color.Gray,
-            color = Color.White,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(4.dp)
+            trackColor  = Color.Gray,
+            color       = Color.White,
+            modifier    = Modifier.fillMaxSize()
         )
     }
 }
