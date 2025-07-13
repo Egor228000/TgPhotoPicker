@@ -2,6 +2,7 @@ package com.example.tgphotopicker
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.camera.core.CameraSelector
 import androidx.compose.animation.AnimatedVisibility
@@ -10,11 +11,18 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.ScrollableState
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateRotation
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.forEachGesture
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,24 +48,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -69,8 +72,10 @@ import coil.request.ImageRequest
 import com.example.tgphotopicker.view.MainViewModel
 import com.skydoves.landscapist.ImageOptions
 import com.skydoves.landscapist.coil.CoilImage
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun SheetContent(
     context: Context,
@@ -86,9 +91,7 @@ fun SheetContent(
 
     val expanded by remember {
         derivedStateOf {
-            bottomSheetState.currentValue == SheetValue.PartiallyExpanded
-                    ||
-                    bottomSheetState.currentValue == SheetValue.Expanded
+            bottomSheetState.currentValue == SheetValue.PartiallyExpanded || bottomSheetState.currentValue == SheetValue.Expanded
 
 
         }
@@ -108,16 +111,11 @@ fun SheetContent(
 
     Column {
         AnimatedVisibility(
-            visible = listMediaSheetSelected.isNotEmpty(),
-            enter = slideInVertically(
-                initialOffsetY = { it },
-                animationSpec = tween(durationMillis = 300)
-            ),
-            exit = slideOutVertically(
-                targetOffsetY = { it },
-                animationSpec = tween(durationMillis = 300)
-            ),
-            modifier = Modifier.padding(horizontal = 8.dp)
+            visible = listMediaSheetSelected.isNotEmpty(), enter = slideInVertically(
+                initialOffsetY = { it }, animationSpec = tween(durationMillis = 300)
+            ), exit = slideOutVertically(
+                targetOffsetY = { it }, animationSpec = tween(durationMillis = 300)
+            ), modifier = Modifier.padding(horizontal = 8.dp)
         ) {
             val text = when {
                 isMixed -> "Выбрано ${listMediaSheetSelected.size} медиафайл${
@@ -145,7 +143,8 @@ fun SheetContent(
                 text = text,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = Color.White,
+                modifier = Modifier.padding(bottom = 8.dp)
             )
         }
 
@@ -211,8 +210,7 @@ fun SheetContent(
                 ) {
                     if (isVideo) {
                         VideoPreview(
-                            uri,
-                            modifier = Modifier
+                            uri, modifier = Modifier
                                 .fillMaxSize()
                                 .graphicsLayer {
                                     scaleX = scale
@@ -220,14 +218,12 @@ fun SheetContent(
                                 }
                                 .clickable {
                                     mainViewModel.addWatchMedia(uri)
-                                },
-                            context = context
+                                }, context = context
                         )
                     } else {
                         CoilImage(
                             imageOptions = ImageOptions(
-                                contentScale = ContentScale.Crop,
-                                alignment = Alignment.Center
+                                contentScale = ContentScale.Crop, alignment = Alignment.Center
                             ),
                             modifier = Modifier
                                 .fillMaxSize()
@@ -240,20 +236,14 @@ fun SheetContent(
                                 }
                                 .clip(cornerShape),
                             imageRequest = {
-                                ImageRequest.Builder(context)
-                                    .data(uri)
-                                    .crossfade(true)
-                                    .size(180)
-                                    .bitmapConfig(Bitmap.Config.RGB_565)
-                                    .build()
+                                ImageRequest.Builder(context).data(uri).crossfade(true).size(180)
+                                    .bitmapConfig(Bitmap.Config.RGB_565).build()
                             },
                             imageLoader = {
-                                ImageLoader.Builder(LocalContext.current)
-                                    .memoryCache {
-                                        Builder(context).maxSizePercent(0.25).build()
-                                    } // ограничить доступную память
-                                    .crossfade(true)
-                                    .build()
+                                ImageLoader.Builder(LocalContext.current).memoryCache {
+                                    Builder(context).maxSizePercent(0.25).build()
+                                } // ограничить доступную память
+                                    .crossfade(true).build()
                             },
                         )
 
@@ -275,88 +265,39 @@ fun SheetContent(
         }
     }
 
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
-    val context = LocalContext.current
-    val density = LocalDensity.current.density
-    var constraints by remember { mutableStateOf(Constraints()) }
-
-    val maxOffsetX = remember(scale, constraints.maxWidth) {
-        if (scale <= 1f) 0f else (constraints.maxWidth * (scale - 1) / 2f)
-    }
-    val maxOffsetY = remember(scale, constraints.maxHeight) {
-        if (scale <= 1f) 0f else (constraints.maxHeight * (scale - 1) / 2f)
-    }
-
-    val state = rememberTransformableState { zoomChange, panChange, _ ->
-        scale = (scale * zoomChange).coerceIn(1f, 6f)
-        offset = Offset(
-            x = (offset.x + panChange.x * scale).coerceIn(-maxOffsetX, maxOffsetX),
-            y = (offset.y + panChange.y * scale).coerceIn(-maxOffsetY, maxOffsetY)
-        )
-    }
 
     watchMedia?.let {
-
-
         Dialog(
             onDismissRequest = {
                 mainViewModel.clearWatchMedia()
-            },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+            }, properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             BackHandler {
                 mainViewModel.clearWatchMedia()
             }
 
             Box(
-                modifier = Modifier
-                    .onSizeChanged {
-                        constraints = Constraints(
-                            maxWidth = (it.width / density).toInt(),
-                            maxHeight = (it.height / density).toInt()
-                        )
-                    }
-                    .fillMaxSize()
+                modifier = Modifier.fillMaxSize()
 
             ) {
                 watchMedia?.let { uri ->
                     val isVideo = mainViewModel.isVideo(context, uri)
-                    Box {
+                    Column(
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .background(Color.Black)
+                            .fillMaxSize()
+                    ) {
                         if (isVideo) {
-                            VideoPlayer(
-                                uri,
-                                modifier = Modifier.fillMaxSize()
-
-                            )
+                           VideoPlayer(
+                               uri,
+                               modifier = Modifier
+                                   .fillMaxWidth()
+                           )
                         } else {
-                            CoilImage(
-                                imageModel = { uri },
-                                imageOptions = ImageOptions(
-                                    contentScale = ContentScale.Crop,
-                                    alignment = Alignment.Center
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .pointerInput(Unit) {
-                                        detectTapGestures(
-                                            onDoubleTap = {
-                                                if (scale > 1f) {
-                                                    scale = 1f
-                                                    offset = Offset.Zero
-                                                } else {
-                                                    scale = 2f
-                                                }
-                                            }
-                                        )
-                                    }
-                                    .graphicsLayer {
-                                        scaleX = scale
-                                        scaleY = scale
-                                        translationX = offset.x
-                                        translationY = offset.y
-                                    }
-                                    .transformable(state)
+                            ZoomableImage(
+                                painter = uri,
                             )
                         }
                     }
@@ -364,17 +305,118 @@ fun SheetContent(
                 IconButton(
                     onClick = {
                         mainViewModel.clearWatchMedia()
-                    }
-                ) {
+                    }) {
                     Icon(
                         painter = painterResource(R.drawable.baseline_close_24),
                         null,
                         tint = Color.White,
-                        modifier = Modifier
-                            .size(30.dp)
+                        modifier = Modifier.size(30.dp)
                     )
                 }
             }
+        }
+    }
+}
+
+
+@ExperimentalFoundationApi
+@Composable
+fun ZoomableImage(
+    painter: Uri,
+    backgroundColor: Color = Color.Transparent,
+    imageAlign: Alignment = Alignment.Center,
+    maxScale: Float = 1f,
+    minScale: Float = 3f,
+    isRotation: Boolean = false,
+    isZoomable: Boolean = true,
+    scrollState: ScrollableState? = null,
+) {
+    val coroutineScope = rememberCoroutineScope()
+
+    val scale = remember { mutableStateOf(1f) }
+    val rotationState = remember { mutableStateOf(1f) }
+    val offsetX = remember { mutableStateOf(1f) }
+    val offsetY = remember { mutableStateOf(1f) }
+
+    Box(
+        modifier = Modifier
+            .background(backgroundColor)
+            .combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = { },
+                onDoubleClick = {
+                    if (scale.value >= 2f) {
+                        scale.value = 1f
+                        offsetX.value = 1f
+                        offsetY.value = 1f
+                    } else scale.value = 3f
+                },
+            )
+            .pointerInput(Unit) {
+                if (isZoomable) {
+                    forEachGesture {
+                        awaitPointerEventScope {
+                            awaitFirstDown()
+                            do {
+                                val event = awaitPointerEvent()
+                                scale.value *= event.calculateZoom()
+                                if (scale.value > 1) {
+                                    scrollState?.run {
+                                        coroutineScope.launch {
+                                            setScrolling(false)
+                                        }
+                                    }
+                                    val offset = event.calculatePan()
+                                    offsetX.value += offset.x
+                                    offsetY.value += offset.y
+                                    rotationState.value += event.calculateRotation()
+                                    scrollState?.run {
+                                        coroutineScope.launch {
+                                            setScrolling(true)
+                                        }
+                                    }
+                                } else {
+                                    scale.value = 1f
+                                    offsetX.value = 1f
+                                    offsetY.value = 1f
+                                }
+                            } while (event.changes.any { it.pressed })
+                        }
+                    }
+                }
+            }
+
+    ) {
+
+        CoilImage(
+            imageModel = { painter }, imageOptions = ImageOptions(
+                contentScale = ContentScale.Crop, alignment = Alignment.Center
+            ), modifier = Modifier
+                .align(imageAlign)
+                .graphicsLayer {
+                    if (isZoomable) {
+                        scaleX = maxOf(maxScale, minOf(minScale, scale.value))
+                        scaleY = maxOf(maxScale, minOf(minScale, scale.value))
+                        if (isRotation) {
+                            rotationZ = rotationState.value
+                        }
+                        translationX = offsetX.value
+                        translationY = offsetY.value
+                    }
+                }
+                .fillMaxWidth()
+        )
+    }
+
+
+}
+
+suspend fun ScrollableState.setScrolling(value: Boolean) {
+    scroll(scrollPriority = MutatePriority.PreventUserInput) {
+        when (value) {
+            true -> Unit
+            else -> awaitCancellation()
         }
     }
 }
