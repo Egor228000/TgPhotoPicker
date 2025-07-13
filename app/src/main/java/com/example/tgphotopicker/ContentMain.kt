@@ -114,6 +114,7 @@ fun ContentMain(
     var isRecording by remember { mutableStateOf(false) }
     val cameraSelectorDefalt by remember { mutableStateOf(CameraSelector.DEFAULT_FRONT_CAMERA) }
     var isPlaying by remember { mutableStateOf(false) }
+    val isPhoto = remember { mutableStateOf(false) }
 
     suspend fun startRecordAnimation() {
 
@@ -496,9 +497,10 @@ fun ContentMain(
                 mainViewModel,
                 false,
                 isRecording,
-                false,
+                isPhoto,
                 cameraSelectorDefalt,
-                context
+                context,
+                onClick = {}
             )
 
             Card(

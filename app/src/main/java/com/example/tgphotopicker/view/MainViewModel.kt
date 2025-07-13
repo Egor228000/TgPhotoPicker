@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.MediaStore
+import androidx.collection.buildObjectLongMap
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -67,6 +68,12 @@ class MainViewModel() : ViewModel() {
     }
     fun clearWatchMedia() {
         _watchMedia.value = null
+    }
+
+    private val _openCamera = MutableStateFlow(false)
+    val openCamera: StateFlow<Boolean> = _openCamera
+    fun addOpenCamera(bool: Boolean) {
+        _openCamera.value =  bool
     }
 
 

@@ -1,6 +1,7 @@
 package com.example.tgphotopicker
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -9,10 +10,12 @@ import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
+import androidx.camera.core.CameraSelector
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
@@ -26,6 +29,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -37,6 +41,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.BottomSheetScaffold
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -80,6 +85,17 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     val mainViewModel: MainViewModel by viewModels()
+    private val cameraLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val uri = result.data?.getParcelableExtra<Uri>("photoUri")
+            uri?.let {
+                mainViewModel.addWatchMedia(it)
+            }
+        }
+    }
+
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -98,23 +114,45 @@ class MainActivity : ComponentActivity() {
                 Main(
                     context,
                     mediaPickerLauncher,
-                    mainViewModel
+                    mainViewModel,
+                    cameraLauncher
                 )
             }
         }
     }
 }
+
 class CameraActivity : ComponentActivity() {
-    val mainViewModel: MainViewModel by viewModels()
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(R.style.Theme_MyApp_FullScreen)
         super.onCreate(savedInstanceState)
         setContent {
             val context = LocalContext.current
-            OpenCamera(
-                mainViewModel,
-                context
+            var photoClick = remember { mutableStateOf(false) }
+
+            CameraXCaptureScreen(
+                onImageCaptured = { uri ->
+                    val resultIntent = Intent().apply {
+                        putExtra("photoUri", uri)
+                    }
+                    setResult(RESULT_OK, resultIntent)
+                    finish()
+                },
+                onVideoCaptured = {},
+                modifier = Modifier.fillMaxSize(),
+                mainViewModel = MainViewModel(),
+                iconVisible = false,
+                isVideoRecording = false,
+                isPhotoCapture = photoClick,
+                cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA,
+                context = context,
+                onClick = {}
             )
+            Button(
+                onClick = { photoClick.value = true },
+            ) {
+                Text("Сделать фото")
+            }
         }
     }
 }
@@ -125,7 +163,8 @@ class CameraActivity : ComponentActivity() {
 fun Main(
     context: Context,
     mediaPickerLauncher: ManagedActivityResultLauncher<PickVisualMediaRequest, List<@JvmSuppressWildcards Uri>>,
-    mainViewModel: MainViewModel
+    mainViewModel: MainViewModel,
+    cameraLauncher: ActivityResultLauncher<Intent>
 ) {
 
     val listMediaSheetSelected by mainViewModel.listMediaSheetSelected.collectAsStateWithLifecycle()
@@ -167,7 +206,7 @@ fun Main(
                     animationSpec = tween(300)
                 )
             ) {
-                PanelSend(mainViewModel,bottomSheetState)
+                PanelSend(mainViewModel, bottomSheetState)
             }
 
             AnimatedVisibility(
@@ -197,18 +236,24 @@ fun Main(
                         bottomSheetState,
                         stateLazyVerticalGrid,
                         innerPadding,
+                        cameraLauncher
                     )
                 }
             },
-            sheetContainerColor = if (watchMedia?.toString()?.isNotEmpty() == true) Color.Black   else  Color(0xFF212D3B)
-            ,
+            sheetContainerColor = if (watchMedia?.toString()
+                    ?.isNotEmpty() == true
+            ) Color.Black else Color(0xFF212D3B),
             sheetPeekHeight = 500.dp,
             sheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
             sheetSwipeEnabled = true,
             topBar = {
                 TopAppBar(
                     title = { Text("Photo Picker", color = Color.White) },
-                    colors = TopAppBarDefaults.topAppBarColors(if (watchMedia?.toString()?.isNotEmpty() == true) Color.Black   else  Color(0xFF212D3B)),
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        if (watchMedia?.toString()?.isNotEmpty() == true) Color.Black else Color(
+                            0xFF212D3B
+                        )
+                    ),
                     modifier = Modifier
                         .blur(
                             if (recordingVideoCircle) 10.dp else 0.dp
@@ -225,8 +270,6 @@ fun Main(
         }
     }
 }
-
-
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -294,7 +337,7 @@ fun PanelSend(
             onClick = {
                 scope.launch {
                     bottomSheetState.hide()
-                        mainViewModel.addMediaChat(listMediaSheetSelected)
+                    mainViewModel.addMediaChat(listMediaSheetSelected)
                     mainViewModel.clearMediaSheetSelected()
                 }
             },
@@ -407,9 +450,6 @@ fun PanelRow() {
 
     }
 }
-
-
-
 
 
 @Composable
