@@ -2,6 +2,7 @@ package com.example.tgphotopicker.view
 
 import android.content.ContentUris
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.lifecycle.ViewModel
@@ -47,12 +48,54 @@ class MainViewModel() : ViewModel() {
         _listMediaChat.value = emptyList()
     }
 
+    private val _hasPermission = MutableStateFlow(false)
+    val hasPermission: StateFlow<Boolean> = _hasPermission
+    fun addHasPermission(bool: Boolean) {
+        _hasPermission.value = bool
+    }
+
+    private val _recordingVideoCircle = MutableStateFlow(false)
+    val recordingVideoCircle: StateFlow<Boolean> = _recordingVideoCircle
+    fun addRecordingVideoCircle(bool: Boolean) {
+        _recordingVideoCircle.value = bool
+    }
+
+    private val _watchMedia = MutableStateFlow<Uri?>(null)
+    val watchMedia: StateFlow<Uri?> = _watchMedia
+    fun addWatchMedia(uri: Uri) {
+        _watchMedia.value = uri
+    }
+    fun clearWatchMedia() {
+        _watchMedia.value = null
+    }
 
 
 
 
 
 
+    fun calculateAspectRatio(context: Context, imageUri: Uri): Float? {
+        return try {
+            context.contentResolver.openInputStream(imageUri)?.use { inputStream ->
+                val options = BitmapFactory.Options().apply {
+                    inJustDecodeBounds = true
+                }
+                BitmapFactory.decodeStream(inputStream, null, options)
+
+                val width = options.outWidth
+                val height = options.outHeight
+
+                if (width > 0 && height > 0) {
+                    width.toFloat() / height.toFloat()
+                } else {
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
 
     fun isVideo(context: Context, uri: Uri): Boolean {
         val type = context.contentResolver.getType(uri)
