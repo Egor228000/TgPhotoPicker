@@ -463,7 +463,8 @@ fun ContentMain(
                 false,
                 isRecording,
                 false,
-                cameraSelectorDefalt
+                cameraSelectorDefalt,
+                context
             )
 
             Card(
@@ -594,7 +595,7 @@ fun TouchControlledCircularProgressIndicator(
                 }
             },
         contentAlignment = Alignment.Center
-    ) {//
+    ) {
         CircularProgressIndicator(
             progress = { localProgress },
             strokeWidth = strokeWidth,
