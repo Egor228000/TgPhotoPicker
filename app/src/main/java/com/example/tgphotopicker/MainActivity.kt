@@ -43,6 +43,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.SheetValue
@@ -84,20 +85,22 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
-            val context = LocalContext.current
-            val mediaPickerLauncher = rememberLauncherForActivityResult(
-                ActivityResultContracts.PickMultipleVisualMedia()
-            ) { uris ->
-                if (!uris.isNullOrEmpty()) {
-                    mainViewModel.clearMediaSheet()
-                    mainViewModel.addMediaSheetFirst(uris)
+            MaterialTheme {
+                val context = LocalContext.current
+                val mediaPickerLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.PickMultipleVisualMedia()
+                ) { uris ->
+                    if (!uris.isNullOrEmpty()) {
+                        mainViewModel.clearMediaSheet()
+                        mainViewModel.addMediaSheetFirst(uris)
+                    }
                 }
+                Main(
+                    context,
+                    mediaPickerLauncher,
+                    mainViewModel
+                )
             }
-            Main(
-                context,
-                mediaPickerLauncher,
-                mainViewModel
-            )
         }
     }
 }
@@ -114,6 +117,8 @@ fun Main(
 
     val listMediaSheetSelected by mainViewModel.listMediaSheetSelected.collectAsStateWithLifecycle()
     val recordingVideoCircle by mainViewModel.recordingVideoCircle.collectAsStateWithLifecycle()
+    val watchMedia by mainViewModel.watchMedia.collectAsStateWithLifecycle()
+
     var stateLazyVerticalGrid = rememberLazyGridState()
 
     PermissionLaunch(
@@ -182,14 +187,15 @@ fun Main(
                     )
                 }
             },
-            sheetContainerColor = Color(0xFF212D3B),
+            sheetContainerColor = if (watchMedia?.toString()?.isNotEmpty() == true) Color.Black   else  Color(0xFF212D3B)
+            ,
             sheetPeekHeight = 500.dp,
             sheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
             sheetSwipeEnabled = true,
             topBar = {
                 TopAppBar(
                     title = { Text("Photo Picker", color = Color.White) },
-                    colors = TopAppBarDefaults.topAppBarColors(Color(0xFF202F41)),
+                    colors = TopAppBarDefaults.topAppBarColors(if (watchMedia?.toString()?.isNotEmpty() == true) Color.Black   else  Color(0xFF212D3B)),
                     modifier = Modifier
                         .blur(
                             if (recordingVideoCircle) 10.dp else 0.dp
