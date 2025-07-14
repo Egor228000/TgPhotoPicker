@@ -373,7 +373,7 @@ class CameraActivity : ComponentActivity() {
                         .align(Alignment.BottomEnd)
                 ) {
 
-                    if (iconFront) {
+                    if (!iconFront) {
                         Icon(
                             painter = painterResource(R.drawable.outline_flip_camera_ios_24),
                             null,
