@@ -238,9 +238,8 @@ class CameraActivity : ComponentActivity() {
                    Box(
                        modifier = Modifier
                            .statusBarsPadding()
-                           .padding(top = 32.dp)
+                           .padding(top = 64.dp)
                            .fillMaxWidth()
-                           .wrapContentHeight()
                            .align(Alignment.TopCenter),
                        contentAlignment = Alignment.Center
                    ) {
