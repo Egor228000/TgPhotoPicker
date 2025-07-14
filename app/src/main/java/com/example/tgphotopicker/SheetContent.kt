@@ -92,7 +92,6 @@ fun SheetContent(
     val listMediaSheetSelected by mainViewModel.listMediaSheetSelected.collectAsStateWithLifecycle()
     val hasPermission by mainViewModel.hasPermission.collectAsStateWithLifecycle()
     val watchMedia by mainViewModel.watchMedia.collectAsStateWithLifecycle()
-    val openCamera by mainViewModel.openCamera.collectAsStateWithLifecycle()
     var photoClick = remember { mutableStateOf(false) }
     var videoClick = remember { mutableStateOf(false) }
 
@@ -170,8 +169,7 @@ fun SheetContent(
                         .width(150.dp)
                         .height(120.dp)
                         .clip(RoundedCornerShape(topStart = 10.dp))
-                        .background(Color.LightGray)
-                        .clickable {},
+                        .background(Color.LightGray),
                     contentAlignment = Alignment.Center,
 
                     ) {
