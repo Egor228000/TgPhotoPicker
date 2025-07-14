@@ -8,7 +8,6 @@ import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
 import android.util.Size
-import android.view.ViewGroup
 import androidx.annotation.OptIn
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
@@ -32,6 +31,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -117,21 +117,29 @@ fun VideoPreview(
 fun VideoPlayer(
     uri: Uri,
     modifier: Modifier = Modifier,
-    playWhenReady: Boolean = false
 ) {
     val context = LocalContext.current
-    val exoPlayer = remember {
-        ExoPlayer.Builder(context)
-            .build()
-            .apply {
-                setMediaItem(MediaItem.fromUri(uri))
-                prepare()
-                this.playWhenReady = playWhenReady
-            }
+    val exoPlayer = remember(uri) {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(uri))
+            repeatMode = Player.REPEAT_MODE_OFF
+            this.playWhenReady = playWhenReady
+            prepare()
+        }
     }
+    DisposableEffect(uri) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_ENDED) {
+                }
+            }
+        }
+        exoPlayer.addListener(listener)
 
-    DisposableEffect(Unit) {
-        onDispose { exoPlayer.release() }
+        onDispose {
+            exoPlayer.removeListener(listener)
+            exoPlayer.release()
+        }
     }
 
     AndroidView(
@@ -139,13 +147,7 @@ fun VideoPlayer(
             PlayerView(ctx).apply {
                 player = exoPlayer
                 useController = true
-                layoutParams =
-                    ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
                 setShutterBackgroundColor(Color.Transparent.toArgb())
-
             }
         },
         modifier = modifier
