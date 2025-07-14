@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -23,6 +24,9 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.forEachGesture
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,7 +45,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.BottomSheetScaffold
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -72,6 +75,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -79,12 +83,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.tgphotopicker.view.MainViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-    val mainViewModel: MainViewModel by viewModels()
+    val mainViewModel: MainViewModel by viewModels {
+        ViewModelProvider.AndroidViewModelFactory.getInstance(application)
+    }
     private val cameraLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -112,10 +120,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 Main(
-                    context,
-                    mediaPickerLauncher,
-                    mainViewModel,
-                    cameraLauncher
+                    context, mediaPickerLauncher, mainViewModel, cameraLauncher
                 )
             }
         }
@@ -123,35 +128,106 @@ class MainActivity : ComponentActivity() {
 }
 
 class CameraActivity : ComponentActivity() {
+    val mainViewModel: MainViewModel by viewModels {
+        ViewModelProvider.AndroidViewModelFactory.getInstance(application)
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(R.style.Theme_MyApp_FullScreen)
         super.onCreate(savedInstanceState)
         setContent {
             val context = LocalContext.current
             var photoClick = remember { mutableStateOf(false) }
+            var videoClick = remember { mutableStateOf(false) }
 
-            CameraXCaptureScreen(
-                onImageCaptured = { uri ->
-                    val resultIntent = Intent().apply {
-                        putExtra("photoUri", uri)
+            val scope = rememberCoroutineScope()
+            Box() {
+
+                CameraXCaptureScreen(
+                    onImageCaptured = { uri ->
+                        val resultIntent = Intent().apply {
+                            putExtra("photoUri", uri)
+                        }
+                        if (uri.toString().isNotEmpty()) {
+                            scope.launch {
+                                setResult(RESULT_OK, resultIntent)
+                                finish()
+                            }
+                        }
+
+                    },
+                    onVideoCaptured = { uri ->
+
+                        val resultIntent = Intent().apply {
+                            putExtra("photoUri", uri)
+                        }
+                        Log.d("CameraX", "✅ Video saved to: $uri")
+
+                        if (uri.toString().isNotEmpty()) {
+                            scope.launch {
+                                setResult(RESULT_OK, resultIntent)
+                                delay(500)
+                                finish()
+
+                            }
+
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                    mainViewModel = mainViewModel,
+                    iconVisible = false,
+                    isVideoRecording = videoClick,
+                    isPhotoCapture = photoClick,
+                    cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA,
+                    context = context,
+                    onClick = {})
+
+                Box(
+                    modifier = Modifier
+                        .size(70.dp)
+                        .align(Alignment.BottomCenter)
+                        .background(Color.Transparent)
+                        .border(2.dp, Color.White, shape = RoundedCornerShape(50.dp))
+                        .pointerInput(Unit) {
+                            forEachGesture {
+                                awaitPointerEventScope {
+                                    val down = awaitFirstDown()
+
+                                    val longPressJob = scope.launch {
+                                        delay(200)
+                                        videoClick.value = true
+                                    }
+
+                                    val up = waitForUpOrCancellation()
+
+                                    longPressJob.cancel()
+
+                                    if (up != null) {
+                                        val duration = up.uptimeMillis - down.uptimeMillis
+                                        if (duration < 100) {
+                                            photoClick.value = true
+                                        } else {
+                                            scope.launch {
+                                                videoClick.value = false
+                                            }
+                                        }
+                                    } else {
+                                        longPressJob.cancel()
+                                        videoClick.value = false
+                                    }
+                                }
+                            }
+                        }
+                ) {
+                    if (photoClick.value || videoClick.value) {
+                        Box(
+                            modifier = Modifier
+                                .padding(8.dp)
+                                .clip(CircleShape)
+                                .size(70.dp)
+                                .background(Color.White)
+                        )
                     }
-                    setResult(RESULT_OK, resultIntent)
-                    finish()
-                },
-                onVideoCaptured = {},
-                modifier = Modifier.fillMaxSize(),
-                mainViewModel = MainViewModel(),
-                iconVisible = false,
-                isVideoRecording = false,
-                isPhotoCapture = photoClick,
-                cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA,
-                context = context,
-                onClick = {}
-            )
-            Button(
-                onClick = { photoClick.value = true },
-            ) {
-                Text("Сделать фото")
+                }
             }
         }
     }
@@ -178,8 +254,7 @@ fun Main(
         mainViewModel,
     )
     val bottomSheetState = rememberStandardBottomSheetState(
-        initialValue = SheetValue.Hidden,
-        skipHiddenState = false
+        initialValue = SheetValue.Hidden, skipHiddenState = false
     )
 
     val scaffoldState = rememberBottomSheetScaffoldState(
@@ -187,8 +262,7 @@ fun Main(
     )
     val expanded by remember {
         derivedStateOf {
-            scaffoldState.bottomSheetState.currentValue == SheetValue.PartiallyExpanded
-                    || listMediaSheetSelected.isNotEmpty()
+            scaffoldState.bottomSheetState.currentValue == SheetValue.PartiallyExpanded || listMediaSheetSelected.isNotEmpty()
 
         }
     }
@@ -198,33 +272,25 @@ fun Main(
             AnimatedVisibility(
                 visible = expanded && listMediaSheetSelected.isNotEmpty(),
                 enter = slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = tween(300)
+                    initialOffsetY = { it }, animationSpec = tween(300)
                 ),
                 exit = slideOutVertically(
-                    targetOffsetY = { it },
-                    animationSpec = tween(300)
+                    targetOffsetY = { it }, animationSpec = tween(300)
                 )
             ) {
                 PanelSend(mainViewModel, bottomSheetState)
             }
 
             AnimatedVisibility(
-                visible = expanded && listMediaSheetSelected.isEmpty(),
-                enter = slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = tween(300)
-                ),
-                exit = slideOutVertically(
-                    targetOffsetY = { it },
-                    animationSpec = tween(300)
+                visible = expanded && listMediaSheetSelected.isEmpty(), enter = slideInVertically(
+                    initialOffsetY = { it }, animationSpec = tween(300)
+                ), exit = slideOutVertically(
+                    targetOffsetY = { it }, animationSpec = tween(300)
                 )
             ) {
                 PanelRow()
             }
-        },
-        modifier = Modifier
-            .imePadding()
+        }, modifier = Modifier.imePadding()
     ) { innerPadding ->
         BottomSheetScaffold(
             scaffoldState = scaffoldState,
@@ -254,13 +320,11 @@ fun Main(
                             0xFF212D3B
                         )
                     ),
-                    modifier = Modifier
-                        .blur(
-                            if (recordingVideoCircle) 10.dp else 0.dp
-                        )
+                    modifier = Modifier.blur(
+                        if (recordingVideoCircle) 10.dp else 0.dp
+                    )
                 )
-            }
-        ) {
+            }) {
             ContentMain(
                 context,
                 scaffoldState,
@@ -275,8 +339,7 @@ fun Main(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PanelSend(
-    mainViewModel: MainViewModel,
-    bottomSheetState: SheetState
+    mainViewModel: MainViewModel, bottomSheetState: SheetState
 ) {
     val listMediaSheetSelected by mainViewModel.listMediaSheetSelected.collectAsStateWithLifecycle()
 
@@ -285,8 +348,7 @@ fun PanelSend(
     val scope = rememberCoroutineScope()
 
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = Modifier.fillMaxWidth()
     ) {
         TextField(
             value = textField,
@@ -308,25 +370,19 @@ fun PanelSend(
             textStyle = TextStyle(fontSize = 25.sp),
             placeholder = {
                 Text(
-                    "Добавить подпись...",
-                    color = Color(0xFF707F92),
-                    fontSize = 20.sp
+                    "Добавить подпись...", color = Color(0xFF707F92), fontSize = 20.sp
                 )
             },
             leadingIcon = {
                 IconButton(
-                    onClick = {
-                    },
-                    modifier = Modifier
-                        .graphicsLayer(
-                            translationY = -35f
-                        )
+                    onClick = {}, modifier = Modifier.graphicsLayer(
+                        translationY = -35f
+                    )
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.outline_emoji_language_24),
                         null,
-                        modifier = Modifier
-                            .size(30.dp),
+                        modifier = Modifier.size(30.dp),
                         tint = Color(0xFF707F92)
                     )
                 }
@@ -340,16 +396,12 @@ fun PanelSend(
                     mainViewModel.addMediaChat(listMediaSheetSelected)
                     mainViewModel.clearMediaSheetSelected()
                 }
-            },
-            modifier = Modifier
+            }, modifier = Modifier
                 .align(Alignment.TopEnd)
                 .graphicsLayer(
-                    translationY = -80f,
-                    translationX = -30f
+                    translationY = -80f, translationX = -30f
                 )
-                .size(64.dp),
-            shape = CircleShape,
-            containerColor = Color(0xFF199AF8)
+                .size(64.dp), shape = CircleShape, containerColor = Color(0xFF199AF8)
         ) {
             Icon(
                 painter = painterResource(R.drawable.baseline_send_24),
@@ -364,8 +416,7 @@ fun PanelSend(
                 .align(Alignment.TopEnd)
                 .offset(x = (-4).dp, y = 8.dp)
                 .background(Color(0xFF199AF8), CircleShape)
-                .border(2.dp, Color(0xFF202F41), CircleShape),
-            contentAlignment = Alignment.Center
+                .border(2.dp, Color(0xFF202F41), CircleShape), contentAlignment = Alignment.Center
         ) {
             Text(
                 text = listMediaSheetSelected.size.toString(),
@@ -390,8 +441,7 @@ fun PanelRow() {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier
-                .horizontalScroll(rememberScrollState())
+            modifier = Modifier.horizontalScroll(rememberScrollState())
         ) {
             val listIcon = listOf(
                 R.drawable.outline_image_24,
@@ -400,24 +450,17 @@ fun PanelRow() {
                 R.drawable.baseline_person_24
             )
             val listColor = listOf(
-                Color(0xFF4C94F4),
-                Color(0xFF58BBF3),
-                Color(0xFF60C256),
-                Color(0xFFDAAD44)
+                Color(0xFF4C94F4), Color(0xFF58BBF3), Color(0xFF60C256), Color(0xFFDAAD44)
 
             )
             val listName = listOf(
-                "Галерея",
-                "Файлы",
-                "Геолокация",
-                "Контакты"
+                "Галерея", "Файлы", "Геолокация", "Контакты"
             )
 
             listIcon.indices.forEach { index ->
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .padding(16.dp)
+                    modifier = Modifier.padding(16.dp)
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -426,9 +469,7 @@ fun PanelRow() {
                             .clip(RoundedCornerShape(50.dp))
                             .background(listColor[index])
                             .size(50.dp)
-                            .clickable {
-                            }
-                    ) {
+                            .clickable {}) {
                         Icon(
                             painter = painterResource(id = listIcon[index]),
                             contentDescription = listName[index],
@@ -440,9 +481,7 @@ fun PanelRow() {
                     Spacer(modifier = Modifier.height(2.dp))
 
                     Text(
-                        text = listName[index],
-                        fontSize = 14.sp,
-                        color = Color(0xFF75818F)
+                        text = listName[index], fontSize = 14.sp, color = Color(0xFF75818F)
                     )
                 }
             }
@@ -476,13 +515,12 @@ fun CircleCheckBox(
             .background(
                 if (checked) checkedColor
                 else Color.Transparent
-            )
-    ) {
+            )) {
         if (checked) {
             Text(
-                countFiles.toString(), color = Color.White,
-                modifier = Modifier
-                    .align(Alignment.Center),
+                countFiles.toString(),
+                color = Color.White,
+                modifier = Modifier.align(Alignment.Center),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
             )
