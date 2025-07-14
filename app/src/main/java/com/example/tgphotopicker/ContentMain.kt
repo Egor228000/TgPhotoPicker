@@ -18,8 +18,11 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.forEachGesture
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -87,7 +90,6 @@ import com.skydoves.landscapist.ImageOptions
 import com.skydoves.landscapist.coil.CoilImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.sqrt
@@ -103,7 +105,7 @@ fun ContentMain(
 
 
 ) {
-
+    val scope = rememberCoroutineScope()
     val recordingVideoCircle by mainViewModel.recordingVideoCircle.collectAsStateWithLifecycle()
     val hasPermission by mainViewModel.hasPermission.collectAsStateWithLifecycle()
     val listMediaChat by mainViewModel.listMediaChat.collectAsStateWithLifecycle()
@@ -186,7 +188,8 @@ fun ContentMain(
                                     .apply {
                                         setMediaItem(MediaItem.fromUri(img))
                                         prepare()
-                                        this.playWhenReady = isPlaying
+                                        this.playWhenReady = true
+
                                     }
                             }
                             val currentProgress = remember { mutableStateOf(0f) }
@@ -392,28 +395,41 @@ fun ContentMain(
                         contentDescription = null,
                         modifier = Modifier
                             .pointerInput(Unit) {
-                                detectTapGestures(
-                                    onTap = {
-                                        iconToogle = !iconToogle
-                                    },
-                                    onPress = {
-                                        mainViewModel.addRecordingVideoCircle(true)
-                                        isRecording.value = true
+                                forEachGesture {
+                                    awaitPointerEventScope {
+                                        val down = awaitFirstDown()
 
-                                        coroutineScope.launch {
-                                            startRecordAnimation()
+                                        val longPressJob = scope.launch {
+                                            delay(200)
+                                            mainViewModel.addRecordingVideoCircle(true)
+                                            isRecording.value = true
+
+                                            coroutineScope.launch {
+                                                startRecordAnimation()
+                                            }
                                         }
 
-                                        val released = try {
-                                            tryAwaitRelease()
-                                        } catch (e: CancellationException) {
-                                            false
+                                        val up = waitForUpOrCancellation()
+
+                                        longPressJob.cancel()
+
+                                        if (up != null) {
+                                            val duration = up.uptimeMillis - down.uptimeMillis
+                                            if (duration < 100) {
+                                                iconToogle = !iconToogle
+                                            } else {
+                                                scope.launch {
+                                                    isRecording.value = false
+
+                                                }
+                                            }
+                                        } else {
+                                            longPressJob.cancel()
+                                            isRecording.value = false
+
                                         }
-                                        isRecording.value = false
-
-
                                     }
-                                )
+                                }
                             }
                             .graphicsLayer(translationY = -35f)
                             .size(30.dp),
