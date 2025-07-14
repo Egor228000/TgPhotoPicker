@@ -12,12 +12,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 class MainViewModel() : ViewModel() {
 
 
     private val _listMediaSheet = MutableStateFlow<List<Uri>>(emptyList())
     val listMediaSheet: StateFlow<List<Uri>>  = _listMediaSheet
+        .asStateFlow()
     fun addMediaSheet(uri: Uri) {
         _listMediaSheet.value += uri
     }
@@ -30,6 +32,8 @@ class MainViewModel() : ViewModel() {
 
     private val _listMediaSheetSelected = MutableStateFlow<List<Uri>>(emptyList())
     val listMediaSheetSelected: StateFlow<List<Uri>>  = _listMediaSheetSelected
+        .asStateFlow()
+
     fun addMediaSheetSelected(uri: Uri) {
         _listMediaSheetSelected.value += uri
     }
@@ -43,6 +47,8 @@ class MainViewModel() : ViewModel() {
 
     private val _listMediaChat = MutableStateFlow<List<Uri>>(emptyList())
     val listMediaChat: StateFlow<List<Uri>>  = _listMediaChat
+        .asStateFlow()
+
     fun addMediaChat(uri: List<Uri>) {
         _listMediaChat.value += uri
     }
@@ -55,18 +61,24 @@ class MainViewModel() : ViewModel() {
 
     private val _hasPermission = MutableStateFlow(false)
     val hasPermission: StateFlow<Boolean> = _hasPermission
+        .asStateFlow()
+
     fun addHasPermission(bool: Boolean) {
         _hasPermission.value = bool
     }
 
     private val _recordingVideoCircle = MutableStateFlow(false)
     val recordingVideoCircle: StateFlow<Boolean> = _recordingVideoCircle
+        .asStateFlow()
+
     fun addRecordingVideoCircle(bool: Boolean) {
         _recordingVideoCircle.value = bool
     }
 
     private val _watchMedia = MutableStateFlow<Uri?>(null)
     val watchMedia: StateFlow<Uri?> = _watchMedia
+        .asStateFlow()
+
     fun addWatchMedia(uri: Uri) {
         _watchMedia.value = uri
     }
@@ -76,6 +88,8 @@ class MainViewModel() : ViewModel() {
 
     private val _openCamera = MutableStateFlow(false)
     val openCamera: StateFlow<Boolean> = _openCamera
+        .asStateFlow()
+
     fun addOpenCamera(bool: Boolean) {
         _openCamera.value =  bool
     }
@@ -86,7 +100,10 @@ class MainViewModel() : ViewModel() {
     var imageCapture: ImageCapture? = null
 
     private val _cameraSelector = MutableStateFlow(CameraSelector.DEFAULT_BACK_CAMERA)
+
     val cameraSelector: StateFlow<CameraSelector> = _cameraSelector
+        .asStateFlow()
+
     fun addCameraSelector(selector: CameraSelector) {
         _cameraSelector.value = selector
     }
