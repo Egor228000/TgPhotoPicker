@@ -18,6 +18,9 @@ import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
 import androidx.camera.core.CameraSelector
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -41,6 +44,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -67,6 +72,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -88,6 +95,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.tgphotopicker.view.MainViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -125,9 +133,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
 enum class FlashMode {
     OFF, AUTO, ON
 }
+
 class CameraActivity : ComponentActivity() {
     val mainViewModel: MainViewModel by viewModels()
 
@@ -150,9 +160,7 @@ class CameraActivity : ComponentActivity() {
 
             )
             var currentFlashMode by remember { mutableStateOf(FlashMode.OFF) }
-            LaunchedEffect(Unit) {
-                mainViewModel.cameraSelector.value
-            }
+
             val cameraSelector by mainViewModel.cameraSelector.collectAsStateWithLifecycle()
 
             val flashIcon = when (mainViewModel.flashMode.value) {
@@ -160,6 +168,27 @@ class CameraActivity : ComponentActivity() {
                 MainViewModel.FlashMode.ON -> R.drawable.baseline_flash_on_24
                 MainViewModel.FlashMode.AUTO -> R.drawable.baseline_flash_auto_24
             }
+            var elapsedMillis by remember { mutableLongStateOf(0L) }
+            val alphaAnim = remember { Animatable(0.3f) }
+
+            LaunchedEffect(videoClick.value) {
+                while (videoClick.value) {
+                    delay(10L)
+                    elapsedMillis += 10L
+                }
+            }
+            LaunchedEffect(videoClick.value) {
+                while (videoClick.value) {
+                    alphaAnim.animateTo(1f, animationSpec = tween(600))
+                    alphaAnim.animateTo(0.3f, animationSpec = tween(600))
+                }
+            }
+            val totalSeconds = elapsedMillis / 1000
+            val seconds = totalSeconds % 60
+            val hundredths = (elapsedMillis % 1000) / 10
+
+            val text = "%02d:%02d".format(seconds, hundredths)
+
 
             Box(
                 modifier = Modifier
@@ -200,9 +229,54 @@ class CameraActivity : ComponentActivity() {
                     iconVisible = false,
                     isVideoRecording = videoClick,
                     isPhotoCapture = photoClick,
-                    cameraSelector = cameraSelector ,
+                    cameraSelector = cameraSelector,
                     context = context,
                     onClick = {})
+
+               if(videoClick.value) {
+
+                   Box(
+                       modifier = Modifier
+                           .statusBarsPadding()
+                           .padding(top = 32.dp)
+                           .fillMaxWidth()
+                           .wrapContentHeight()
+                           .align(Alignment.TopCenter),
+                       contentAlignment = Alignment.Center
+                   ) {
+
+                       Box(
+                           modifier = Modifier
+                               .background(
+                                   color = Color.Black.copy(alpha = 0.5f),
+                                   shape = RoundedCornerShape(8.dp)
+                               )
+                               .padding(horizontal = 16.dp, vertical = 8.dp)
+                       ) {
+                           Row(
+                               verticalAlignment = Alignment.CenterVertically
+                           ) {
+                               Box(
+                                   modifier = Modifier
+                                       .background(
+                                           color = Color.Red.copy(alphaAnim.value),
+                                           shape = RoundedCornerShape(50.dp)
+                                       )
+                                       .size(8.dp)
+                               )
+                               Spacer(Modifier.padding(horizontal = 4.dp))
+                               Text(
+                                   text = text,
+                                   color = Color.White,
+                                   fontSize = 17.sp
+                               )
+                           }
+
+                       }
+                   }
+               }
+
+
 
                 Box(
                     modifier = Modifier
@@ -250,7 +324,7 @@ class CameraActivity : ComponentActivity() {
                                 .padding(8.dp)
                                 .clip(CircleShape)
                                 .size(70.dp)
-                                .background(Color.White)
+                                .background(if (videoClick.value) Color(0xFFCA4645) else Color.White)
                         )
                     }
                 }
@@ -274,18 +348,20 @@ class CameraActivity : ComponentActivity() {
                         .size(70.dp)
                         .align(Alignment.BottomStart)
                 ) {
-                        Icon(painter = painterResource(flashIcon), null,   modifier = Modifier
+                    Icon(
+                        painter = painterResource(flashIcon), null, modifier = Modifier
                             .size(35.dp),
-                            tint = Color.White)
+                        tint = Color.White
+                    )
 
                 }
                 IconButton(
-                    onClick = {  iconFront = !iconFront
+                    onClick = {
+                        iconFront = !iconFront
                         mainViewModel.addCameraSelector(
                             if (iconFront) CameraSelector.DEFAULT_FRONT_CAMERA
                             else CameraSelector.DEFAULT_BACK_CAMERA
                         )
-                        Log.d("CameraX", "🔁 Selector: ${if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) "FRONT" else "BACK"}")
 
                     },
                     modifier = Modifier
