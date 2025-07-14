@@ -2,9 +2,10 @@ package com.example.tgphotopicker
 
 import android.Manifest
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -29,10 +30,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -44,7 +43,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.tgphotopicker.view.MainViewModel
 import kotlinx.coroutines.delay
 import java.io.File
-import kotlin.jvm.java
+import kotlin.concurrent.thread
 
 @Composable
 fun CameraXCaptureScreen(
@@ -53,7 +52,7 @@ fun CameraXCaptureScreen(
     modifier: Modifier = Modifier,
     mainViewModel: MainViewModel,
     iconVisible: Boolean,
-    isVideoRecording: Boolean,
+    isVideoRecording: MutableState<Boolean>,
     isPhotoCapture: MutableState<Boolean>,
     cameraSelector: CameraSelector,
     context: Context,
@@ -87,12 +86,12 @@ fun CameraXCaptureScreen(
     val recorder = remember {
         Recorder.Builder()
             .setQualitySelector(QualitySelector.from(Quality.HD))
+            .setExecutor(ContextCompat.getMainExecutor(context))
             .build()
     }
+
     val videoCapture = remember { VideoCapture.withOutput(recorder) }
 
-    var activeRecording by remember { mutableStateOf<Recording?>(null) }
-    var isRecordingStarted by remember { mutableStateOf(isVideoRecording) }
 
     // CameraX binding
     LaunchedEffect(cameraProviderFuture, cameraSelector) {
@@ -140,50 +139,55 @@ fun CameraXCaptureScreen(
             )
         }
     }
+    val activeRecording = remember { mutableStateOf<Recording?>(null) }
+    val isRecordingStarted = remember { mutableStateOf(false) }
 
-    // Video recording
-    LaunchedEffect(isVideoRecording) {
-        if (isVideoRecording && activeRecording == null) {
-
+    LaunchedEffect(isVideoRecording.value) {
+        if (isVideoRecording.value && activeRecording.value == null) {
             val timestamp = System.currentTimeMillis()
             val videoFile = File(context.cacheDir, "VID_$timestamp.mp4")
+            val outputOptions = FileOutputOptions.Builder(videoFile).build()
 
-            val outputOptions = FileOutputOptions
-                .Builder(videoFile)
-                .build()
-            activeRecording = videoCapture.output
+            val recording = videoCapture.output
                 .prepareRecording(context, outputOptions)
                 .withAudioEnabled()
                 .start(ContextCompat.getMainExecutor(context)) { event ->
                     when (event) {
                         is VideoRecordEvent.Start -> {
                             Log.d("CameraX", "▶️ Recording started")
-                            isRecordingStarted = true
+                            isRecordingStarted.value = true
                         }
 
                         is VideoRecordEvent.Finalize -> {
-                            isRecordingStarted = false
-                            activeRecording = null
+                            Log.d("CameraX", "✅ Video finalized")
+                            isRecordingStarted.value = false
+                            activeRecording.value = null
 
                             if (!event.hasError()) {
-                                val fileUri = Uri.fromFile(videoFile)
-                                onVideoCaptured(fileUri)
-                                Log.d("CameraX", "✅ Video saved to: $fileUri")
+                                waitForFileReady(videoFile) {
+                                    val fileUri = Uri.fromFile(videoFile)
+                                    onVideoCaptured(fileUri)
+                                }
+
+                                Log.d("VideoFile", "Size = ${videoFile.length()}")
                             } else {
                                 Log.e("CameraX", "❌ Video error: ${event.error}", event.cause)
                             }
                         }
                     }
                 }
-        } else if (!isVideoRecording && activeRecording != null) {
-            if (isRecordingStarted) {
-                delay(100)
-                activeRecording?.stop()
-                Log.d("CameraX", "⏹️ Stopping video recording")
-            } else {
-                Log.w("CameraX", "⚠️ Tried to stop before recording started")
+
+            activeRecording.value = recording
+        }
+
+        if (!isVideoRecording.value && activeRecording.value != null) {
+            while (!isRecordingStarted.value) {
+                delay(50)
             }
-            activeRecording = null
+
+            delay(200)
+            activeRecording.value?.stop()
+            Log.d("CameraX", "⏹️ Stopping video recording")
         }
     }
 
@@ -192,11 +196,11 @@ fun CameraXCaptureScreen(
         onDispose {
             try {
                 cameraProviderFuture.get().unbindAll()
-                if (isRecordingStarted) {
-                    activeRecording?.stop()
+                if (isRecordingStarted.value) {
+                    activeRecording?.value?.stop()
                 }
-                activeRecording = null
-                isRecordingStarted = false
+                activeRecording.value = null
+                isRecordingStarted.value = false
                 Log.d("CameraX", "📴 Camera released")
             } catch (e: Exception) {
                 Log.e("CameraX", "❌ Error during camera release", e)
@@ -206,13 +210,14 @@ fun CameraXCaptureScreen(
 
     AndroidView(
         factory = { previewView },
-        modifier = modifier
-    )
+        modifier = modifier,
+
+        )
 
     if (iconVisible) {
         Icon(
             painter = painterResource(
-                if (isVideoRecording || hasAudioPermission) R.drawable.baseline_camera_alt_24
+                if (isVideoRecording.value || hasAudioPermission) R.drawable.baseline_camera_alt_24
                 else R.drawable.outline_video_camera_front_off_24
             ),
             contentDescription = null,
@@ -228,5 +233,20 @@ fun CameraXCaptureScreen(
                     }
                 }
         )
+    }
+}
+
+fun waitForFileReady(file: File, onReady: () -> Unit) {
+    thread {
+        var ready = false
+        while (!ready) {
+            if (file.exists() && file.length() > 0) {
+                ready = true
+                Handler(Looper.getMainLooper()).post {
+                    onReady()
+                }
+            }
+            Thread.sleep(100)
+        }
     }
 }
