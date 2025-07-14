@@ -90,9 +90,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-    val mainViewModel: MainViewModel by viewModels {
-        ViewModelProvider.AndroidViewModelFactory.getInstance(application)
-    }
+    val mainViewModel: MainViewModel by viewModels()
     private val cameraLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -128,9 +126,7 @@ class MainActivity : ComponentActivity() {
 }
 
 class CameraActivity : ComponentActivity() {
-    val mainViewModel: MainViewModel by viewModels {
-        ViewModelProvider.AndroidViewModelFactory.getInstance(application)
-    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(R.style.Theme_MyApp_FullScreen)
         super.onCreate(savedInstanceState)
@@ -173,7 +169,7 @@ class CameraActivity : ComponentActivity() {
                         }
                     },
                     modifier = Modifier.fillMaxSize(),
-                    mainViewModel = mainViewModel,
+                    mainViewModel = MainViewModel(),
                     iconVisible = false,
                     isVideoRecording = videoClick,
                     isPhotoCapture = photoClick,
