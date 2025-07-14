@@ -279,7 +279,7 @@ class CameraActivity : ComponentActivity() {
 
                 Box(
                     modifier = Modifier
-                        .padding(bottom = 32.dp)
+                        .padding(bottom = 40.dp)
                         .navigationBarsPadding()
                         .size(70.dp)
                         .align(Alignment.BottomCenter)
@@ -340,7 +340,7 @@ class CameraActivity : ComponentActivity() {
 
                     },
                     modifier = Modifier
-                        .padding(bottom = 32.dp, start = 32.dp)
+                        .padding(bottom = 40.dp, start = 32.dp)
 
                         .navigationBarsPadding()
 
@@ -364,7 +364,7 @@ class CameraActivity : ComponentActivity() {
 
                     },
                     modifier = Modifier
-                        .padding(bottom = 32.dp, end = 32.dp)
+                        .padding(bottom = 40.dp, end = 32.dp)
 
                         .navigationBarsPadding()
 
