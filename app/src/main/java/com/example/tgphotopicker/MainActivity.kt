@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -63,6 +64,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -83,7 +85,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.tgphotopicker.view.MainViewModel
 import kotlinx.coroutines.delay
@@ -124,8 +125,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
+enum class FlashMode {
+    OFF, AUTO, ON
+}
 class CameraActivity : ComponentActivity() {
+    val mainViewModel: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(R.style.Theme_MyApp_FullScreen)
@@ -134,9 +138,32 @@ class CameraActivity : ComponentActivity() {
             val context = LocalContext.current
             var photoClick = remember { mutableStateOf(false) }
             var videoClick = remember { mutableStateOf(false) }
-
+            var iconFront by remember { mutableStateOf(false) }
             val scope = rememberCoroutineScope()
-            Box() {
+
+            var currentIconIndex by remember { mutableStateOf(0) }
+            val listFlashIcon = listOf(
+                R.drawable.baseline_flash_off_24,
+                R.drawable.baseline_flash_auto_24,
+                R.drawable.baseline_flash_on_24
+
+
+            )
+            var currentFlashMode by remember { mutableStateOf(FlashMode.OFF) }
+            LaunchedEffect(Unit) {
+                mainViewModel.cameraSelector.value
+            }
+            val cameraSelector by mainViewModel.cameraSelector.collectAsStateWithLifecycle()
+
+            val flashIcon = when (mainViewModel.flashMode.value) {
+                MainViewModel.FlashMode.OFF -> R.drawable.baseline_flash_off_24
+                MainViewModel.FlashMode.ON -> R.drawable.baseline_flash_on_24
+                MainViewModel.FlashMode.AUTO -> R.drawable.baseline_flash_auto_24
+            }
+
+            Box(
+                modifier = Modifier
+            ) {
 
                 CameraXCaptureScreen(
                     onImageCaptured = { uri ->
@@ -169,20 +196,23 @@ class CameraActivity : ComponentActivity() {
                         }
                     },
                     modifier = Modifier.fillMaxSize(),
-                    mainViewModel = MainViewModel(),
+                    mainViewModel = mainViewModel,
                     iconVisible = false,
                     isVideoRecording = videoClick,
                     isPhotoCapture = photoClick,
-                    cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA,
+                    cameraSelector = cameraSelector ,
                     context = context,
                     onClick = {})
 
                 Box(
                     modifier = Modifier
+                        .padding(bottom = 32.dp)
+                        .navigationBarsPadding()
                         .size(70.dp)
                         .align(Alignment.BottomCenter)
                         .background(Color.Transparent)
                         .border(2.dp, Color.White, shape = RoundedCornerShape(50.dp))
+
                         .pointerInput(Unit) {
                             forEachGesture {
                                 awaitPointerEventScope {
@@ -199,7 +229,7 @@ class CameraActivity : ComponentActivity() {
 
                                     if (up != null) {
                                         val duration = up.uptimeMillis - down.uptimeMillis
-                                        if (duration < 100) {
+                                        if (duration < 150) {
                                             photoClick.value = true
                                         } else {
                                             scope.launch {
@@ -224,6 +254,77 @@ class CameraActivity : ComponentActivity() {
                         )
                     }
                 }
+                IconButton(
+                    onClick = {
+                        currentIconIndex = (currentIconIndex + 1) % listFlashIcon.size
+                        currentFlashMode = when (currentFlashMode) {
+                            FlashMode.OFF -> FlashMode.AUTO
+                            FlashMode.AUTO -> FlashMode.ON
+                            FlashMode.ON -> FlashMode.OFF
+                        }
+                        mainViewModel.toggleFlashMode()
+
+
+                    },
+                    modifier = Modifier
+                        .padding(bottom = 32.dp, start = 32.dp)
+
+                        .navigationBarsPadding()
+
+                        .size(70.dp)
+                        .align(Alignment.BottomStart)
+                ) {
+                        Icon(painter = painterResource(flashIcon), null,   modifier = Modifier
+                            .size(35.dp),
+                            tint = Color.White)
+
+                }
+                IconButton(
+                    onClick = {  iconFront = !iconFront
+                        mainViewModel.addCameraSelector(
+                            if (iconFront) CameraSelector.DEFAULT_FRONT_CAMERA
+                            else CameraSelector.DEFAULT_BACK_CAMERA
+                        )
+                        Log.d("CameraX", "🔁 Selector: ${if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) "FRONT" else "BACK"}")
+
+                    },
+                    modifier = Modifier
+                        .padding(bottom = 32.dp, end = 32.dp)
+
+                        .navigationBarsPadding()
+
+                        .size(70.dp)
+                        .align(Alignment.BottomEnd)
+                ) {
+
+                    if (iconFront) {
+                        Icon(
+                            painter = painterResource(R.drawable.outline_flip_camera_ios_24),
+                            null,
+                            modifier = Modifier
+                                .size(35.dp),
+                            tint = Color.White
+
+                        )
+                    } else {
+                        Icon(
+                            painter = painterResource(R.drawable.outline_photo_camera_front_24),
+                            null,
+                            modifier = Modifier
+                                .size(40.dp),
+                            tint = Color.White
+                        )
+                    }
+                }
+                Text(
+                    "Нажмите для фото и удерживайте для видео",
+                    color = Color.White,
+                    modifier = Modifier
+                        .navigationBarsPadding()
+                        .padding(bottom = 8.dp)
+                        .align(Alignment.BottomCenter),
+                    fontSize = 17.sp
+                )
             }
         }
     }
