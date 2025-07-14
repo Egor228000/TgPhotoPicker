@@ -32,6 +32,7 @@
         android:theme="@style/Theme.TgPhotoPicker"
         tools:targetApi="31">
         <activity
+            android:hardwareAccelerated="true"
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
@@ -43,6 +44,7 @@
             </intent-filter>
         </activity>
         <activity
+            android:hardwareAccelerated="true"
             android:name=".CameraActivity"
             android:exported="true"
             android:theme="@style/Theme.MyApp.FullScreen">
