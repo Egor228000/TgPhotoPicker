@@ -103,6 +103,7 @@ fun ContentMain(
 
 
 ) {
+
     val recordingVideoCircle by mainViewModel.recordingVideoCircle.collectAsStateWithLifecycle()
     val hasPermission by mainViewModel.hasPermission.collectAsStateWithLifecycle()
     val listMediaChat by mainViewModel.listMediaChat.collectAsStateWithLifecycle()
@@ -111,7 +112,7 @@ fun ContentMain(
     var iconToogle by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     val progress = remember { Animatable(0f) }
-    var isRecording by remember { mutableStateOf(false) }
+    var isRecording = remember { mutableStateOf(false) }
     val cameraSelectorDefalt by remember { mutableStateOf(CameraSelector.DEFAULT_FRONT_CAMERA) }
     var isPlaying by remember { mutableStateOf(false) }
     val isPhoto = remember { mutableStateOf(false) }
@@ -124,9 +125,9 @@ fun ContentMain(
                 targetValue = 1f,
                 animationSpec = tween(durationMillis = 60000)
             )
-            isRecording = false
+            isRecording.value = false
         } else {
-            isRecording = false
+            isRecording.value = false
             progress.snapTo(0f)
         }
     }
@@ -277,15 +278,15 @@ fun ContentMain(
 
 
                         } else if (mainViewModel.isVideo(context, img)) {
+
                             VideoPlayer(
-                                uri = img,
+                                img,
                                 modifier = Modifier
                                     .fillMaxSize(0.7f)
                                     .aspectRatio(aspectRatio)
                                     .clip(RoundedCornerShape(10, 3, 3, 10))
                                     .background(brush)
                                     .padding(4.dp),
-                                playWhenReady = true
                             )
                         } else {
 
@@ -397,7 +398,7 @@ fun ContentMain(
                                     },
                                     onPress = {
                                         mainViewModel.addRecordingVideoCircle(true)
-                                        isRecording = true
+                                        isRecording.value = true
 
                                         coroutineScope.launch {
                                             startRecordAnimation()
@@ -408,7 +409,7 @@ fun ContentMain(
                                         } catch (e: CancellationException) {
                                             false
                                         }
-                                        isRecording = false
+                                        isRecording.value = false
 
 
                                     }
