@@ -5,6 +5,10 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.MediaStore
+import androidx.camera.core.CameraControl
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -78,7 +82,38 @@ class MainViewModel() : ViewModel() {
 
 
 
+    var cameraControl: CameraControl? = null
+    var imageCapture: ImageCapture? = null
 
+    private val _cameraSelector = MutableStateFlow(CameraSelector.DEFAULT_BACK_CAMERA)
+    val cameraSelector: StateFlow<CameraSelector> = _cameraSelector
+    fun addCameraSelector(selector: CameraSelector) {
+        _cameraSelector.value = selector
+    }
+
+    var flashMode = mutableStateOf(FlashMode.OFF)
+
+    enum class FlashMode { OFF, ON, AUTO }
+
+    fun toggleFlashMode() {
+        flashMode.value = when (flashMode.value) {
+            FlashMode.OFF -> FlashMode.ON
+            FlashMode.ON -> FlashMode.AUTO
+            FlashMode.AUTO -> FlashMode.OFF
+        }
+
+
+        when (flashMode.value) {
+            FlashMode.ON -> cameraControl?.enableTorch(true)
+            FlashMode.OFF, FlashMode.AUTO -> cameraControl?.enableTorch(false)
+        }
+
+        imageCapture?.flashMode = when (flashMode.value) {
+            FlashMode.OFF -> ImageCapture.FLASH_MODE_OFF
+            FlashMode.ON -> ImageCapture.FLASH_MODE_ON
+            FlashMode.AUTO -> ImageCapture.FLASH_MODE_AUTO
+        }
+    }
 
 
     fun calculateAspectRatio(context: Context, imageUri: Uri): Float? {

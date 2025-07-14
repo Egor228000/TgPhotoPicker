@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -40,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.tgphotopicker.view.MainViewModel
 import kotlinx.coroutines.delay
 import java.io.File
@@ -92,9 +94,8 @@ fun CameraXCaptureScreen(
 
     val videoCapture = remember { VideoCapture.withOutput(recorder) }
 
-
-    // CameraX binding
-    LaunchedEffect(cameraProviderFuture, cameraSelector) {
+    val cameraSelector by mainViewModel.cameraSelector.collectAsStateWithLifecycle()
+    LaunchedEffect(cameraSelector ) {
         val cameraProvider = cameraProviderFuture.get()
         val preview = Preview.Builder().build().also {
             it.setSurfaceProvider(previewView.surfaceProvider)
@@ -102,13 +103,17 @@ fun CameraXCaptureScreen(
 
         try {
             cameraProvider.unbindAll()
-            cameraProvider.bindToLifecycle(
+            val camera = cameraProvider.bindToLifecycle(
                 lifecycleOwner,
                 cameraSelector,
                 preview,
                 imageCapture,
                 videoCapture
             )
+
+            mainViewModel.cameraControl = camera.cameraControl
+            mainViewModel.imageCapture = imageCapture
+
         } catch (e: Exception) {
             Log.e("CameraX", "❌ Failed to bind camera use cases", e)
         }
@@ -223,7 +228,7 @@ fun CameraXCaptureScreen(
             contentDescription = null,
             tint = Color.White,
             modifier = Modifier
-                .size(40.dp)
+                .size(50.dp)
                 .padding(8.dp)
                 .clickable {
                     if (!hasCameraPermission || !hasAudioPermission) {
