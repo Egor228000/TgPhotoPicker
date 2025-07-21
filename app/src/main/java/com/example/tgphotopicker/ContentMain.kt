@@ -8,6 +8,7 @@ import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.CameraSelector.DEFAULT_BACK_CAMERA
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.Animatable
@@ -73,6 +74,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
@@ -105,6 +108,9 @@ fun ContentMain(
 
 
 ) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     val scope = rememberCoroutineScope()
     val recordingVideoCircle by mainViewModel.recordingVideoCircle.collectAsStateWithLifecycle()
     val hasPermission by mainViewModel.hasPermission.collectAsStateWithLifecycle()
@@ -115,10 +121,13 @@ fun ContentMain(
     val coroutineScope = rememberCoroutineScope()
     val progress = remember { Animatable(0f) }
     var isRecording = remember { mutableStateOf(false) }
-    val cameraSelectorDefalt by remember { mutableStateOf(CameraSelector.DEFAULT_FRONT_CAMERA) }
+    val cameraSelectorDefalt by mainViewModel.cameraSelector.collectAsStateWithLifecycle()
     var isPlaying by remember { mutableStateOf(false) }
     val isPhoto = remember { mutableStateOf(false) }
 
+    LaunchedEffect(Unit) {
+        mainViewModel.addCameraSelector(selector = CameraSelector.DEFAULT_FRONT_CAMERA)
+    }
     suspend fun startRecordAnimation() {
 
         if (recordingVideoCircle) {
@@ -188,84 +197,46 @@ fun ContentMain(
                                     .apply {
                                         setMediaItem(MediaItem.fromUri(img))
                                         prepare()
-                                        this.playWhenReady = true
-
+                                        playWhenReady = true    // автозапуск
                                     }
                             }
-                            val currentProgress = remember { mutableStateOf(0f) }
+                            var isPlaying by remember { mutableStateOf(true) }
 
+                            // 3) прогресс воспроизведения
+                            val currentProgress = remember { mutableStateOf(0f) }
                             LaunchedEffect(exoPlayer) {
                                 while (true) {
                                     val pos = exoPlayer.currentPosition.toFloat()
                                     val dur = (exoPlayer.duration.takeIf { it > 0 } ?: 1L).toFloat()
                                     currentProgress.value = pos / dur
-                                    delay(1L)
+                                    delay(1)
                                 }
                             }
 
-
-
                             Box(
                                 modifier = Modifier
-                                    .clickable(
-                                        onClick = {
-                                            isPlaying = !isPlaying
-                                        }
-                                    )
                                     .size(300.dp)
                                     .clip(CircleShape)
-
-                            ) {
-                                Column(
-                                    modifier = Modifier
                                     .clickable {
-                                    isPlaying = !isPlaying
-                                }
-                                    .zIndex(1f)
-                                ) {
-
-
-                                    LaunchedEffect(isPlaying) {
-                                        if (isPlaying) exoPlayer.play() else exoPlayer.pause()
+                                        isPlaying = !isPlaying
+                                        exoPlayer.playWhenReady = isPlaying
                                     }
-
-                                    // listen for end of playback
-                                    DisposableEffect(exoPlayer) {
-                                        val listener = object : Player.Listener {
-                                            override fun onPlaybackStateChanged(state: Int) {
-                                                if (state == Player.STATE_ENDED) {
-                                                    // rewind and update UI
-                                                    exoPlayer.seekTo(0)
-                                                    isPlaying = false
-                                                }
-                                            }
+                            ) {
+                                AndroidView(
+                                    factory = { ctx ->
+                                        PlayerView(ctx).apply {
+                                            player = exoPlayer
+                                            useController = false
+                                            setShutterBackgroundColor(Color.Transparent.toArgb())
                                         }
-                                        exoPlayer.addListener(listener)
-                                        onDispose {
-                                            exoPlayer.removeListener(listener)
-                                            exoPlayer.release()
-                                        }
-                                    }
-
-                                    AndroidView(
-                                        factory = { ctx ->
-                                            PlayerView(ctx).apply {
-                                                player = exoPlayer
-                                                useController = false
-                                                setShutterBackgroundColor(Color.Transparent.toArgb())
-                                            }
-                                        },
-                                        modifier = Modifier
-                                            .size(600.dp)
-                                            .aspectRatio(0.1f),
-                                    )
-
-                                }
-                                TouchControlledCircularProgressIndicator(
+                                    },
                                     modifier = Modifier
-                                        .zIndex(2f)
+                                        .size(600.dp)
+                                        .aspectRatio(0.1f)
+                                )
 
-                                        .matchParentSize(),
+                                TouchControlledCircularProgressIndicator(
+                                    modifier = Modifier.matchParentSize(),
                                     progress = currentProgress.value,
                                     onProgressChange = { newProgress ->
                                         val duration = exoPlayer.duration
@@ -275,6 +246,10 @@ fun ContentMain(
                                         }
                                     }
                                 )
+                            }
+
+                            DisposableEffect(exoPlayer) {
+                                onDispose { exoPlayer.release() }
 
 
                             }
@@ -397,6 +372,9 @@ fun ContentMain(
                             .pointerInput(Unit) {
                                 forEachGesture {
                                     awaitPointerEventScope {
+                                        keyboardController?.hide()
+                                        focusManager.clearFocus()
+
                                         val down = awaitFirstDown()
 
                                         val longPressJob = scope.launch {
@@ -417,6 +395,7 @@ fun ContentMain(
                                             val duration = up.uptimeMillis - down.uptimeMillis
                                             if (duration < 100) {
                                                 iconToogle = !iconToogle
+
                                             } else {
                                                 scope.launch {
                                                     isRecording.value = false
